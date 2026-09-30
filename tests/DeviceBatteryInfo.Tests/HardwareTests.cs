@@ -5,6 +5,7 @@ using DeviceBatteryInfo.Sources.Bluetooth;
 using DeviceBatteryInfo.Sources.Hid;
 using DeviceBatteryInfo.Sources.Logitech;
 using DeviceBatteryInfo.Sources.Razer;
+using DeviceBatteryInfo.Sources.SystemBattery;
 using HidSharp;
 using NUnit.Framework;
 
@@ -23,14 +24,37 @@ public sealed class HardwareTests
     ];
 
     [SetUp]
-    public void RequireWindows() => Assume.That(OperatingSystem.IsWindows());
+    public void RequireSupportedPlatform() =>
+        Assume.That(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS());
+
+    private static IBluetoothBatteryReader PlatformBluetoothReader() =>
+        OperatingSystem.IsMacOS()
+            ? new MacBluetoothBatteryReader(Serilog.Core.Logger.None)
+            : new PowerShellPnpBatteryReader();
+
+    [Test]
+    public async Task Reads_the_system_battery()
+    {
+        ISystemPowerReader reader = OperatingSystem.IsMacOS()
+            ? new MacSystemPowerReader()
+            : new WindowsSystemPowerReader();
+
+        var reading = await reader.ReadAsync(CancellationToken.None);
+
+        HardwareReport.Line(
+            "System battery",
+            reading is null
+                ? "no battery"
+                : $"{reading.Percent}% {reading.Status} empty {reading.TimeToEmpty} full {reading.TimeToFull}"
+        );
+    }
 
     [Test]
     public async Task Lists_bluetooth_devices()
     {
-        var discovery = new WindowsDeviceDiscovery(
+        var discovery = new SystemDeviceDiscovery(
             new HidSharpTransport(Serilog.Core.Logger.None),
-            new PowerShellPnpBatteryReader(),
+            PlatformBluetoothReader(),
             new MacroDeck.Plugin.Testing.Fakes.FakeAndroidDeviceManager()
         );
 
@@ -98,6 +122,7 @@ public sealed class HardwareTests
     [Test]
     public async Task Reads_while_a_foreign_poller_hammers_the_same_interface()
     {
+        Assume.That(OperatingSystem.IsWindows(), "The competing poller talks to NativeHid.");
         var interference = new CancellationTokenSource();
         var pollers = DeviceList
             .Local.GetHidDevices(0x1532)

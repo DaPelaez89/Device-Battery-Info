@@ -196,10 +196,10 @@
         <value>Android phone (adb)</value>
     </data>
     <data name="ConfigFlow.Device.Category.Bluetooth" xml:space="preserve">
-        <value>Bluetooth device (Windows)</value>
+        <value>Bluetooth device</value>
     </data>
     <data name="ConfigFlow.Device.Category.System" xml:space="preserve">
-        <value>This PC</value>
+        <value>This computer</value>
     </data>
     <data name="ConfigFlow.Device.Category.Other" xml:space="preserve">
         <value>Other devices</value>
@@ -247,10 +247,10 @@
         <value>Overrides the list above when filled in. Use the serial as adb lists it, or host:port for a phone on wireless debugging that is not connected yet.</value>
     </data>
     <data name="ConfigFlow.Device.BluetoothName.Label" xml:space="preserve">
-        <value>Windows device name</value>
+        <value>Bluetooth device name</value>
     </data>
     <data name="ConfigFlow.Device.BluetoothName.Description" xml:space="preserve">
-        <value>The device's name as Windows shows it, for example "CORSAIR HS80 MAX". Connect the device and reopen this step to pick it from a list instead.</value>
+        <value>The device's name as your system shows it, for example "CORSAIR HS80 MAX". Connect the device and reopen this step to pick it from a list instead.</value>
     </data>
     <data name="ConfigFlow.Device.BluetoothName.ListDescription" xml:space="preserve">
         <value>Pick the device from the list of currently connected Bluetooth devices. Not listed? Enter its name manually below.</value>
@@ -265,7 +265,7 @@
         <value>Or enter a name manually</value>
     </data>
     <data name="ConfigFlow.Device.BluetoothNameCustom.Description" xml:space="preserve">
-        <value>Overrides the list above when filled in. Use this for a device that is not connected right now - it must match the name exactly as Windows shows it.</value>
+        <value>Overrides the list above when filled in. Use this for a device that is not connected right now - it must match the name exactly as your system shows it.</value>
     </data>
     <data name="ConfigFlow.Device.BluetoothKind.Label" xml:space="preserve">
         <value>Kind</value>

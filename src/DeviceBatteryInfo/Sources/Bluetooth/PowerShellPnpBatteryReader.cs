@@ -1,17 +1,6 @@
-using System.Diagnostics;
-
 namespace DeviceBatteryInfo.Sources.Bluetooth;
 
-internal interface IPnpBatteryReader
-{
-    Task<string?> ReadRawAsync(string friendlyName, CancellationToken cancellationToken);
-
-    Task<IReadOnlyList<(string Name, string? RawBattery)>> ListDevicesAsync(
-        CancellationToken cancellationToken
-    );
-}
-
-internal sealed class PowerShellPnpBatteryReader : IPnpBatteryReader
+internal sealed class PowerShellPnpBatteryReader : IBluetoothBatteryReader
 {
     // DEVPKEY_Bluetooth_Battery: the well-known key Windows fills for HFP/A2DP audio devices
     private const string BatteryPropertyKey = "{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2";
@@ -61,7 +50,7 @@ internal sealed class PowerShellPnpBatteryReader : IPnpBatteryReader
                 Select-Object -First 1
             """;
 
-        var output = await RunAsync(
+        var output = await RunScriptAsync(
             script,
             cancellationToken,
             new Dictionary<string, string?> { [FriendlyNameEnvironmentVariable] = friendlyName }
@@ -132,7 +121,7 @@ internal sealed class PowerShellPnpBatteryReader : IPnpBatteryReader
             $batteryByName.Keys | Sort-Object | ForEach-Object { "$_`t$($batteryByName[$_])" }
             """;
 
-        var output = await RunAsync(script, cancellationToken);
+        var output = await RunScriptAsync(script, cancellationToken);
         return output
             .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(line =>
@@ -146,72 +135,16 @@ internal sealed class PowerShellPnpBatteryReader : IPnpBatteryReader
             .ToArray();
     }
 
-    private static async Task<string> RunAsync(
+    private static Task<string> RunScriptAsync(
         string script,
         CancellationToken cancellationToken,
         IReadOnlyDictionary<string, string?>? environment = null
-    )
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = PowerShellExecutablePath,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            ArgumentList = { "-NoProfile", "-NonInteractive", "-Command", script },
-        };
-        if (environment is not null)
-        {
-            foreach (var (key, value) in environment)
-            {
-                startInfo.Environment[key] = value;
-            }
-        }
-
-        using var process = new Process { StartInfo = startInfo };
-        if (!process.Start())
-        {
-            throw new InvalidOperationException("Could not start powershell.");
-        }
-
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
-        try
-        {
-            await process.WaitForExitAsync(cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            TryKill(process);
-            throw;
-        }
-
-        var stdout = await stdoutTask;
-        var stderr = await stderrTask;
-        if (process.ExitCode != 0)
-        {
-            throw new InvalidOperationException(
-                $"PowerShell exited with {process.ExitCode}: {stderr.Trim()}"
-            );
-        }
-
-        return stdout.Trim();
-    }
-
-    private static void TryKill(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
-        }
-        catch (Exception exception)
-            when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
-        {
-            // Already gone.
-        }
-    }
+    ) =>
+        ExternalProcess.RunAsync(
+            PowerShellExecutablePath,
+            "PowerShell",
+            ["-NoProfile", "-NonInteractive", "-Command", script],
+            cancellationToken,
+            environment
+        );
 }

@@ -5,10 +5,10 @@ work in this repository, update this file as part of that change rather than lea
 
 This folder is **Device Battery Info** (`manifest.json` `name`), a Macro Deck 3 out-of-process plugin,
 scaffolded from `macrodeck-plugin new`. It reads battery state from three generic backends (the host
-PC, an Android phone over adb, Windows Bluetooth audio devices) plus a growing catalog of specific
-products under "Other devices" (each model lives in a device family, see `Sources/DeviceFamily.cs`), and exposes each as a set of Macro Deck
-variables plus charging/low events, alongside a custom deck widget (a multi-device panel and a
-single-device tile).
+computer (Windows or macOS), an Android phone over adb, Bluetooth devices on Windows and macOS) plus a
+growing catalog of specific products under "Other devices" (each model lives in a device family, see
+`Sources/DeviceFamily.cs`), and exposes each as a set of Macro Deck variables plus charging/low events,
+alongside a custom deck widget (a multi-device panel and a single-device tile).
 
 [README.md](README.md) is the human-facing guide: how to build, how to run against a real host, how to
 pack. This file is the rule set for writing the plugin. Read it before changing code. The template
@@ -20,8 +20,8 @@ package itself is covered by
 ```
 src/DeviceBatteryInfo/
   Program.cs               builder chain: bind options, register registry + sources + poll loop
-  manifest.json            identity, icon, win-x64 entrypoint
-  macrodeck-build.json     the win-x64 publish target
+  manifest.json            identity, icon, win-x64 and osx-arm64 entrypoints (one managed build)
+  macrodeck-build.json     the publish target per entrypoint
   BatteryIntegration.cs    IPluginIntegration + IVariableProvider (on-demand catalog, push) +
                            IEventProvider + IConfigFlowProvider (AllowsMultipleConfigurations)
   BatteryIntegration.Widgets.cs   the same partial class: IWidgetTypeProvider + IUiProvider
@@ -32,7 +32,7 @@ src/DeviceBatteryInfo/
                            Bluetooth and Android phones + pre-fills on edit), DeviceModelCatalog (brand -> model, collected
                            from the registered device families, for the "Other devices" step),
                            DeviceEntryReader (entries -> BatterySlot[]),
-                           DeviceConfigKeys, WindowsDeviceDiscovery
+                           DeviceConfigKeys, SystemDeviceDiscovery
   Core/DeviceCatalog.cs    the live device set: seeded from BatteryPluginOptions, replaced from config
                            entries
   Core/IDeviceDiscovery.cs public: lists present Bluetooth devices and attached Android phones for the
@@ -51,6 +51,11 @@ src/DeviceBatteryInfo/
                            BatteryTrendFormatter (BatteryTrend -> display text / a normalized rate)
   Sources/                 one folder per backend (SystemBattery, Razer, Adb, Bluetooth), each a
                            pure parser + an IO wrapper behind an interface + IBatterySource(+Provider);
+                           SystemBattery has ISystemPowerReader (Windows: kernel32, macOS: pmset) and
+                           Bluetooth has IBluetoothBatteryReader (Windows: PowerShell PnP, macOS:
+                           system_profiler plus pmset accps), picked by OperatingSystem in
+                           BatterySourceRegistration;
+                           ExternalProcess runs the command line tools;
                            BatterySourceRegistration wires them into DI. DeviceFamily.cs holds the
                            device-family contracts (IDeviceFamily, DeviceModel, SimpleDeviceFamily,
                            DeviceFamilyProvider); every family in the assembly is registered by
@@ -63,7 +68,10 @@ src/DeviceBatteryInfo/
   Properties/launchSettings.json   the single real-host debug profile
 tests/DeviceBatteryInfo.Tests/
   BatteryIntegrationTests.cs      builds, initializes, the variables catalogue + a read work
-  BatterySourceParsingTests.cs    dumpsys / Razer report / PnP / Win32 power-status parsers
+  BatterySourceParsingTests.cs    Razer report / PnP / Win32 power-status parsers
+  MacOsSourceTests.cs             pmset and system_profiler parsers, the Bluetooth snapshot, the system
+                                  source
+  HidTransportPlatformTests.cs    macOS interface and unit keys, the bounded exchange on a fake channel
   BatteryRegistryTests.cs         registry update / stale / retain, and catalog id round-trips
   HardwareTests.cs                [Explicit, Category=Hardware]: lists Bluetooth and HID interfaces, reads
                                   every supported HID device through the plugin, and reads one again while a
@@ -175,6 +183,25 @@ Design knowledge that is not obvious from the code alone:
   hashtables), only `{{...}}` interpolates a C# value, which is what makes it readable as actual
   multi-line PowerShell with real variable names instead of an escaped, concatenated one-liner. Keep
   writing new embedded PowerShell here the same way.
+- **macOS sources are command line tools behind the same interfaces, run through `ExternalProcess`.** Use
+  absolute paths (`/usr/bin/pmset`, `/usr/sbin/system_profiler`): the plugin inherits its environment
+  from the Macro Deck host. `PmsetBatteryParser` reads the first `InternalBattery` line only (no line or
+  `present: false` means no battery, as on a desktop Mac). `BatteryStatus` has no not-charging value, so
+  `AC attached; not charging` (Optimized Battery Charging) maps to Full at 100 % and Unknown below, never
+  to Charging. `SystemBatterySourceProvider` remembers that a battery was seen so a poll does not run
+  pmset twice; until then its probe has a 5 second timeout and a failure or hang counts as no battery yet
+  (logged once), so it cannot stall discovery for the other providers; a battery that later reports
+  `present: false` makes the source throw every poll (a stale value) instead of disappearing.
+  `SystemProfilerBluetoothParser` reads `device_connected` only, because `device_not_connected` entries
+  keep a stale cached level; a device reports its main battery, else the lower of Left and Right, and the
+  case is ignored. `MacBluetoothBatteryReader` merges `system_profiler` with `pmset -g accps`
+  (accessories such as a Logitech MX mouse have a battery only in the latter; it is matched by name into
+  devices system_profiler lists as connected, so a not-connected accessory or an AirPods case entry never
+  becomes a device, and a failing accps call costs only those levels), and serves reads from a 5 second
+  snapshot behind a semaphore so several Bluetooth sources of one poll run one process; a failed or
+  cancelled fetch is never cached and each waiter fetches for itself, and the config-flow picker never
+  uses the snapshot. Keep the parsers pure and tested with real captured output; the shape of a connected
+  entry with a battery was only ever seen in fixtures marked as such until a real one is captured.
 - **The Android phone goes through Macro Deck's adb, never a spawned `adb`.** `AdbBatterySource` uses
   the host's `IAndroidDeviceManager` (DI-provided, gated by the manifest's `host:adb` permission) and
   its `GetBatteryStateAsync`, so there is no process runner, no `dumpsys` parser and no executable
@@ -183,7 +210,7 @@ Design knowledge that is not obvious from the code alone:
   and keeps the last value. The address is a serial or `host:port`; only the latter is passed to
   `ConnectAsync`, because a USB serial cannot be connected to. The host allows 4 concurrent adb calls
   per plugin and refuses the fifth with `RateLimited`, which matters if more phones are added than
-  that. The config flow's phone picker (`WindowsDeviceDiscovery.ListAndroidDevicesAsync`) reads each
+  that. The config flow's phone picker (`SystemDeviceDiscovery.ListAndroidDevicesAsync`) reads each
   attached phone's battery one at a time for the same reason, and shares `DeviceConfigFlow.PickerField`
   with the Bluetooth picker: a list when something is attached, a text field when nothing is or an
   existing entry is being edited, plus a manual override field. Tests use `FakeAndroidDeviceManager`
@@ -234,7 +261,7 @@ Design knowledge that is not obvious from the code alone:
   `GENERIC_READ|GENERIC_WRITE` and throws `DeviceIOException` when the control interface declines;
   `NativeHid` does what hidapi (and so the old Dart app) does - `CreateFile` with read+write,
   then retry with **zero access**, which still carries the `HidD_SetFeature` / `HidD_GetFeature`
-  IOCTLs. HidSharp is kept only for enumeration + feature-report length. The response byte is
+  IOCTLs. On Windows HidSharp is kept only for enumeration + feature-report length. The response byte is
   `resp[10]` of the **raw** hidapi buffer (byte 0 is the report id) - never a span that skips the id
   byte. The dongle periodically answers a poll with a not-yet-ready placeholder frame (status
   `resp[1]` not `0x02`, command echo `resp[7..8]` absent, payload zeroed) while it is still talking to
@@ -272,6 +299,28 @@ Design knowledge that is not obvious from the code alone:
   config flow never asks for a USB id or an interface. There is no in-UI "custom device" path by
   design (a raw USB id alone cannot drive the Razer HID protocol); an unlisted device is a model in a
   family.
+- **HID on macOS uses HidSharp for the feature reports and enumeration, through `IFeatureChannel`.**
+  `HidSharpTransport` opens a device with `NativeHid` on Windows and with
+  `HidStream.SetFeature/GetFeature` elsewhere; the loop, timing and buffer layout are unchanged apart
+  from those open/set/get call sites. HidSharp lists only devices with a real USB id on macOS (it returns
+  nothing on a Mac with only built-in Apple devices), paths look like
+  `.../IOUSBHostInterface@N/AppleUserUSBHostHIDDevice` with `N` in hex, and the feature report length
+  includes the report id like on Windows. A refused `Open` blocks for about a second inside HidSharp, so
+  off Windows the whole exchange (`ExchangeAsync` and `ExchangeReportsAsync`) runs in `Task.Run` bounded
+  by its budget. Budget expiry must be an `InvalidOperationException`, never an
+  `OperationCanceledException`: `HidFamily`, `DeviceFamilyProvider` and
+  `BatteryPollingService.DiscoverAsync` let a cancellation escape, which aborts the poll for every
+  source. The abandoned task ends on its own and disposes its channel; a probe costs at most the
+  exchanges of the protocol's `ReadAsync` times `HidChannel.ProbeBudget`, and a device that stays refused
+  pays that on every poll. A blank or all-zero serial (the Razer reports `000000000000`) does not
+  identify a unit, so `PhysicalUnitKey` falls back to the Windows parent-instance token or the macOS path
+  above `/IOUSBHostInterface@`. macOS also presents one device per interface with every top-level
+  collection inside it (the G Pro X Wireless has consumer control, `FF43:0202` and `FF00:0001` in one),
+  where Windows presents one device per collection, so `HidCandidate.Usages` lists all of them and
+  `HidFamily` matches a vendor collection anywhere in the list; the HID++ write there must be as long as
+  that report id (`OutputReportLength`), not the longest output report of the interface. Read on macOS:
+  Razer Basilisk V3 Pro (cable and dongle) and the Logitech G Pro X Wireless headset; the Logitech mice
+  are unverified there.
 
 Authoritative upstream documentation, in the
 [Macro Deck 3 repository](https://github.com/Macro-Deck-App/Macro-Deck-3/tree/main/docs/plugin-development):
@@ -628,14 +677,15 @@ A `dotnet build -c Release` output is *not* packable: the manifest points at `ru
 only `build` assembles, so `validate`/`pack` against `bin/Release/net10.0` fails on a missing entrypoint.
 Adding a platform means adding it to `entrypoints` **and** `macrodeck-build.json`.
 
-This plugin is **framework-dependent**: `entrypoints.win-x64` names `runtimes/win-x64/DeviceBatteryInfo.dll`
-with `"runtime": { "kind": "FrameworkDependent", "dotnetVersion": "10.0" }`, and `macrodeck-build.json`
-publishes with `--self-contained false -p:UseAppHost=false`. Macro Deck ships a .NET 10 runtime (ASP.NET
-Core included) with the host and runs the plugin on it, which is also why it appears as `dotnet` in
-process lists. Self-contained is the other pairing, for a runtime Macro Deck does not ship: drop the
-`runtime` block, point `executable` at the apphost (no `.dll`; `.exe` on Windows) and publish with
-`--self-contained true` (no `-p:UseAppHost=false`). Keep the manifest and `macrodeck-build.json` on the
-same pairing; mixing them fails validation.
+This plugin is **framework-dependent**: `entrypoints.win-x64` and `osx-arm64` each name
+`runtimes/<rid>/DeviceBatteryInfo.dll` (the same managed build, no native assets) with `"runtime": {
+"kind": "FrameworkDependent", "dotnetVersion": "10.0" }`, and `macrodeck-build.json` publishes with
+`--self-contained false -p:UseAppHost=false`. Macro Deck ships a .NET 10 runtime (ASP.NET Core included)
+with the host and runs the plugin on it, which is also why it appears as `dotnet` in process lists.
+Self-contained is the other pairing, for a runtime Macro Deck does not ship: drop the `runtime` block,
+point `executable` at the apphost (no `.dll`; `.exe` on Windows) and publish with `--self-contained true`
+(no `-p:UseAppHost=false`). Keep the manifest and `macrodeck-build.json` on the same pairing; mixing them
+fails validation.
 
 Packing validates first, recomputes every `files[]` digest from disk and fills in `languages` from
 `Localization/`, discarding whatever the source manifest declared - so never hand-maintain either.

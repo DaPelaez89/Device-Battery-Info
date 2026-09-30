@@ -8,9 +8,13 @@ on:
 
 jobs:
   build-and-test:
-    # Several sources are Windows-only (Win32 power status, PnP/Bluetooth via PowerShell), so the
-    # plugin only builds and runs its tests on Windows.
-    runs-on: windows-latest
+    # The Windows and macOS sources differ (Win32 power status and PowerShell PnP versus pmset and
+    # system_profiler), so both platforms build and run the tests.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
