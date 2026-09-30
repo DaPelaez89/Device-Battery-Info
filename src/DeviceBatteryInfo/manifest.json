@@ -22,6 +22,11 @@
   "permissions": [
     "host:adb"
   ],
+  "ai": {
+    "interaction": false,
+    "generatedContent": false,
+    "generatedAssets": false
+  },
   "compatibility": {
     "macroDeck": ">=3.0.0-beta.12"
   },

@@ -49,12 +49,12 @@ A catalog of individual products that someone has implemented and tested against
 only lists exactly what is confirmed to work, never a whole brand or category, so a model that is not
 listed here is not supported even if it shares a brand or protocol with one that is.
 
-| Brand    | Model                | Type    | Connection        | Percent | Charging | Notes                                                                                                        |
-| -------- | -------------------- | ------- | ----------------- | ------- | -------- | ------------------------------------------------------------------------------------------------------------ |
-| Razer    | DeathAdder V3 Pro    | Mouse   | Dongle or cable   | yes     | yes      |                                                                                                              |
-| Razer    | Basilisk V3 Pro      | Mouse   | Dongle or cable   | yes     | yes      |                                                                                                              |
-| Logitech | G Pro X Superlight 2 | Mouse   | Receiver or cable | yes     | yes      |                                                                                                              |
-| Logitech | G Pro X Wireless     | Headset | Dongle            | approx. | yes      | Reports a voltage, so the percentage is an estimate. It reads nothing while the headset is off.              |
+| Brand    | Model                | Type    | Connection        | Percent | Charging | Notes                                                                                           |
+| -------- | -------------------- | ------- | ----------------- | ------- | -------- | ----------------------------------------------------------------------------------------------- |
+| Razer    | DeathAdder V3 Pro    | Mouse   | Dongle or cable   | yes     | yes      |                                                                                                 |
+| Razer    | Basilisk V3 Pro      | Mouse   | Dongle or cable   | yes     | yes      |                                                                                                 |
+| Logitech | G Pro X Superlight 2 | Mouse   | Receiver or cable | yes     | yes      |                                                                                                 |
+| Logitech | G Pro X Wireless     | Headset | Dongle            | approx. | yes      | Reports a voltage, so the percentage is an estimate. It reads nothing while the headset is off. |
 
 The exact list is always the "Other devices" step of the config flow, which is built from the same
 code. If this table and the flow ever disagree, the flow is right; please fix the table.
@@ -124,6 +124,13 @@ dotnet test
 ```
 
 Build and tests need no Macro Deck installation.
+
+The [Makefile](Makefile) wraps the everyday commands (`make` lists them): `make run` / `make watch`
+launch the plugin against the running Macro Deck through `macrodeck-plugin run` (pairing once, the
+credential kept in `src/DeviceBatteryInfo/.macrodeck-dev-state/`), `make stub` against a stub host,
+`make cli` keeps the CLI at the SDK's version, `make pack` builds and inspects the artifact, and
+`make release VERSION=x.y.z` tests and packs, bumps `manifest.json`, commits, tags `vx.y.z` and pushes -
+the tag starts the release workflow. On Windows it needs GNU make and Git Bash's `sh` on `PATH`.
 
 ### Project layout
 
@@ -321,21 +328,26 @@ suite covers the protocol contract; these tests are for the plugin's own behavio
 
 ### Building against a local SDK build
 
-The plugin tracks the Macro Deck SDK's *published* packages and floats to the newest one, so a plain
-`dotnet build` always resolves the latest release. While a change is still unreleased, pack the SDK
-from a Macro Deck 3 checkout into this repository's `local-feed/` and build against that version:
+Every package version is exact, in `Directory.Packages.props`. To move to the newest releases, run
+
+```bash
+dotnet package update
+```
+
+which rewrites the versions there (Macro Deck packages and everything else). Review the diff before
+committing: it bumps every outdated package, not only the SDK. While an SDK change is still unreleased,
+pack it from a Macro Deck 3 checkout into this repository's `local-feed/` and point the Macro Deck
+packages at that version:
 
 ```bash
 dotnet pack MacroDeck.slnx -c Release -p:Version=3.0.0-local.1 -o <path-to-this-repo>/local-feed
-dotnet build -p:MacroDeckSdkVersion=3.0.0-local.1
+dotnet package update MacroDeck.Sdk@3.0.0-local.1 MacroDeck.Localization@3.0.0-local.1   MacroDeck.Plugin.Analyzers@3.0.0-local.1 MacroDeck.Plugin.Hosting@3.0.0-local.1   MacroDeck.Plugin.Serilog@3.0.0-local.1 MacroDeck.Plugin.Testing@3.0.0-local.1
 ```
 
-`NuGet.config` already lists `local-feed/` as a package source, and `MacroDeckSdkVersion` sets the
-version for every Macro Deck package at once (see `Directory.Packages.props`). Nothing in the
-repository pins the local version, so a plain `dotnet build` goes back to the published one. Pick a
-version that cannot collide with a real release, `3.0.0-local.N` rather than a published preview
-version, which would put a hand-built package into the global NuGet cache under the name of a
-published one.
+`NuGet.config` already lists `local-feed/` as a package source. Revert `Directory.Packages.props` before
+committing - a local version must never be committed. Pick a version that cannot collide with a real
+release, `3.0.0-local.N`, so a hand-built package never lands in the global NuGet cache under the name of
+a published one.
 
 ### Localization
 

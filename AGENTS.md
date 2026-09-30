@@ -321,11 +321,11 @@ fetch in the same session. **Fetch every document below again before you start a
 you call it done.** If one cannot be fetched, say so and stop rather than assuming it still says what it
 said last time.
 
-| What | Where |
-| --- | --- |
-| Creator Guidelines (Markdown) | <https://api.macro-deck.app/api/v1/public/creator-guidelines> |
-| Blocked packages (JSON) | <https://api.macro-deck.app/api/v1/public/dependency-policy/blocked-packages> |
-| Minimum SDK version and allowed Macro Deck packages (JSON) | <https://api.macro-deck.app/api/v1/public/dependency-policy/sdk> |
+| What                                                       | Where                                                                         |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Creator Guidelines (Markdown)                              | <https://api.macro-deck.app/api/v1/public/creator-guidelines>                 |
+| Blocked packages (JSON)                                    | <https://api.macro-deck.app/api/v1/public/dependency-policy/blocked-packages> |
+| Minimum SDK version and allowed Macro Deck packages (JSON) | <https://api.macro-deck.app/api/v1/public/dependency-policy/sdk>              |
 
 A change is not done until all six hold:
 
@@ -338,10 +338,10 @@ A change is not done until all six hold:
    version. Otherwise only the matching versions are blocked. `reason` says why. Replace the package or
    restructure the code that needs it. Never work around a block by vendoring, renaming or loading the
    package some other way.
-3. **The Macro Deck SDK is at least `minimumSdkVersion`.** The Macro Deck packages float to the newest
-   published version by default, so this usually holds on its own. It stops holding when
-   `MacroDeckSdkVersion` is pinned (as it currently is, in `Directory.Packages.props`), or when a build
-   runs against `local-feed/`. A release must never be built against an SDK older than the minimum.
+3. **The Macro Deck SDK is at least `minimumSdkVersion`.** The Macro Deck packages
+   use the exact version in `Directory.Packages.props`. Bump it with `dotnet package update` before a
+   release that needs newer SDK surface, and never release with a `3.0.0-local.N` version from
+   `local-feed/`. A release must never be built against an SDK older than the minimum.
 4. **Only allowed Macro Deck packages are used.** Every package in the graph whose id starts with
    `MacroDeck.` must match an entry in `allowedMacroDeckPackages`. Anything else under that prefix is
    refused on upload, including packages from another Macro Deck repository that were never published
@@ -608,10 +608,6 @@ it after any change to capability shape, cancellation handling or the manifest, 
 check going from pass to fail as a blocking regression. Most checks `SKIP` until the plugin declares
 capabilities.
 
-The Macro Deck packages float to the newest published version, so the commands above need no version
-argument. Only to test against SDK surface that is not published yet, pack it into `local-feed/` and
-pass `-p:MacroDeckSdkVersion=<version>` - see "Building against a local SDK build" in
-[README.md](README.md).
 
 Working in the template repository itself rather than in a plugin generated from it? Changing its shape
 (files, names, `.template.config/template.json`, `packaging/`) also needs a generated-project check -

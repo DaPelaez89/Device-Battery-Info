@@ -2,29 +2,23 @@
     <PropertyGroup>
         <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
         <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
-        <!-- The Macro Deck packages float to the newest published version, so no release version is
-             pinned anywhere in this repository. -->
-        <CentralPackageFloatingVersionsEnabled>true</CentralPackageFloatingVersionsEnabled>
-        <!-- One knob for every Macro Deck package, so a build against a locally packed SDK is
-             `dotnet build -p:MacroDeckSdkVersion=<version>` and nothing else - see README.md. -->
-        <MacroDeckSdkVersion Condition="'$(MacroDeckSdkVersion)' == ''">3.0.0-beta.12</MacroDeckSdkVersion>
     </PropertyGroup>
     <ItemGroup>
-        <PackageVersion Include="MacroDeck.Localization" Version="$(MacroDeckSdkVersion)" />
-        <PackageVersion Include="MacroDeck.Plugin.Analyzers" Version="$(MacroDeckSdkVersion)" />
-        <PackageVersion Include="MacroDeck.Plugin.Hosting" Version="$(MacroDeckSdkVersion)" />
-        <PackageVersion Include="MacroDeck.Plugin.Serilog" Version="$(MacroDeckSdkVersion)" />
-        <PackageVersion Include="MacroDeck.Plugin.Testing" Version="$(MacroDeckSdkVersion)" />
-        <PackageVersion Include="MacroDeck.Sdk" Version="$(MacroDeckSdkVersion)" />
+        <PackageVersion Include="MacroDeck.Localization" Version="3.0.0-beta.13" />
+        <PackageVersion Include="MacroDeck.Plugin.Analyzers" Version="3.0.0-beta.13" />
+        <PackageVersion Include="MacroDeck.Plugin.Hosting" Version="3.0.0-beta.13" />
+        <PackageVersion Include="MacroDeck.Plugin.Serilog" Version="3.0.0-beta.13" />
+        <PackageVersion Include="MacroDeck.Plugin.Testing" Version="3.0.0-beta.13" />
+        <PackageVersion Include="MacroDeck.Sdk" Version="3.0.0-beta.13" />
     </ItemGroup>
     <ItemGroup>
         <!-- Cross-platform HID access for feature-report battery reads (e.g. Razer wireless mice). -->
         <PackageVersion Include="HidSharp" Version="2.6.4" />
     </ItemGroup>
     <ItemGroup>
-        <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.0" />
+        <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
         <PackageVersion Include="NUnit" Version="4.6.1" />
-        <PackageVersion Include="NUnit.Analyzers" Version="4.14.0" />
+        <PackageVersion Include="NUnit.Analyzers" Version="4.15.0" />
         <PackageVersion Include="NUnit3TestAdapter" Version="6.3.0" />
     </ItemGroup>
 </Project>
