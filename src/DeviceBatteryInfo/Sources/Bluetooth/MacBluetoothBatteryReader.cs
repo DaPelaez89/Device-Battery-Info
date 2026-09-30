@@ -2,24 +2,34 @@ using Serilog;
 
 namespace DeviceBatteryInfo.Sources.Bluetooth;
 
-internal sealed class MacBluetoothBatteryReader(
-    ILogger logger,
-    Func<CancellationToken, Task<string>>? runSystemProfiler = null,
-    Func<CancellationToken, Task<string>>? runPmsetAccessories = null,
-    TimeProvider? timeProvider = null
-) : IBluetoothBatteryReader, IDisposable
+internal sealed class MacBluetoothBatteryReader : IBluetoothBatteryReader, IDisposable
 {
     private static readonly TimeSpan SnapshotLifetime = TimeSpan.FromSeconds(5);
 
-    private readonly Func<CancellationToken, Task<string>> _runSystemProfiler =
-        runSystemProfiler ?? RunSystemProfilerAsync;
-    private readonly Func<CancellationToken, Task<string>> _runPmsetAccessories =
-        runPmsetAccessories ?? RunPmsetAccessoriesAsync;
-    private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
+    private readonly ILogger _logger;
+    private readonly Func<CancellationToken, Task<string>> _runSystemProfiler;
+    private readonly Func<CancellationToken, Task<string>> _runPmsetAccessories;
+    private readonly TimeProvider _time;
     private readonly SemaphoreSlim _gate = new(1, 1);
-    private bool _accessoriesFailed;
+    private int _accessoriesFailed;
     private IReadOnlyList<(string Name, string? RawBattery)>? _snapshot;
     private long _snapshotTimestamp;
+
+    public MacBluetoothBatteryReader(ILogger logger)
+        : this(logger, RunSystemProfilerAsync, RunPmsetAccessoriesAsync) { }
+
+    internal MacBluetoothBatteryReader(
+        ILogger logger,
+        Func<CancellationToken, Task<string>> runSystemProfiler,
+        Func<CancellationToken, Task<string>> runPmsetAccessories,
+        TimeProvider? timeProvider = null
+    )
+    {
+        _logger = logger;
+        _runSystemProfiler = runSystemProfiler;
+        _runPmsetAccessories = runPmsetAccessories;
+        _time = timeProvider ?? TimeProvider.System;
+    }
 
     public async Task<string?> ReadRawAsync(
         string friendlyName,
@@ -81,7 +91,7 @@ internal sealed class MacBluetoothBatteryReader(
         try
         {
             var accessories = PmsetAccessoryParser.Parse(await _runPmsetAccessories(cancellationToken));
-            _accessoriesFailed = false;
+            Interlocked.Exchange(ref _accessoriesFailed, 0);
             return accessories
                 .DistinctBy(a => a.Name, StringComparer.Ordinal)
                 .ToDictionary(a => a.Name, a => a.RawBattery, StringComparer.Ordinal);
@@ -89,12 +99,12 @@ internal sealed class MacBluetoothBatteryReader(
         catch (Exception exception)
             when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
-            if (!_accessoriesFailed)
+            // The picker fetches outside the snapshot gate, so two failures can race to log.
+            if (Interlocked.Exchange(ref _accessoriesFailed, 1) == 0)
             {
-                logger.Warning(exception, "The Bluetooth accessory battery levels could not be read.");
+                _logger.Warning(exception, "The Bluetooth accessory battery levels could not be read.");
             }
 
-            _accessoriesFailed = true;
             return [];
         }
     }

@@ -532,12 +532,10 @@ public sealed class SystemBatterySourceTests
                 return null;
             },
         };
-        var provider = new SystemBatterySourceProvider(
-            reader,
-            Catalog(),
-            Serilog.Core.Logger.None,
-            TimeSpan.FromMilliseconds(100)
-        );
+        var provider = new SystemBatterySourceProvider(reader, Catalog(), Serilog.Core.Logger.None)
+        {
+            ProbeTimeout = TimeSpan.FromMilliseconds(100),
+        };
 
         Assert.That(await provider.DiscoverAsync(CancellationToken.None), Is.Empty);
     }

@@ -46,10 +46,11 @@ These work with whatever hardware of that kind you have.
 | Bluetooth device               | macOS    | `system_profiler` plus `pmset -g accps`         | yes     | no       |
 
 On macOS a Bluetooth device reports one level: its main battery, or the lower of the left and right
-earbud (the case is ignored). Connected devices that `system_profiler` lists without a battery, such as many
-Logitech mice, get their level from `pmset -g accps`, which is where macOS itself reads accessory batteries.
-Only devices that are connected right now are read, because macOS keeps a stale level for devices that are not. A Mac that is held below full on AC by Optimized Battery Charging
-reports its level with an unknown charging state, since it is neither charging nor discharging.
+earbud (the case is ignored). Connected devices that `system_profiler` lists without a battery, such as
+many Logitech mice, get their level from `pmset -g accps`, which is where macOS itself reads accessory
+batteries. Only devices that are connected right now are read, because macOS keeps a stale level for
+devices that are not. A Mac that is held below full on AC by Optimized Battery Charging reports its level
+with an unknown charging state, since it is neither charging nor discharging.
 
 ### Specific devices ("Other devices")
 
@@ -78,16 +79,15 @@ listing, once published) and install it from Macro Deck's plugin manager.
 
 The plugin ships for **Windows x64** and **macOS on Apple silicon**. Intel Macs and Linux are not
 supported. On macOS the Bluetooth source relies on the `device_connected` layout of `system_profiler`,
-which macOS 12 and later are expected to produce (checked on macOS 27). A connected device with a battery in
-`system_profiler` itself, such as earbuds, has not been seen on real hardware; a Logitech MX Master 3S was read
-through `pmset -g accps`.
+which macOS 12 and later are expected to produce (checked on macOS 27). A connected device with a battery
+in `system_profiler` itself, such as earbuds, has not been seen on real hardware; a Logitech MX Master 3S
+was read through `pmset -g accps`.
 
 USB HID devices (the Razer and Logitech models below) are read on macOS through the same HID code as on
 Windows. That was checked on macOS with a Razer Basilisk V3 Pro (cable and dongle) and a Logitech G Pro X
-Wireless headset. macOS can ask for **Input
-Monitoring** before an application may open some HID interfaces; if a device stays unavailable, allow
-Macro Deck under System Settings > Privacy & Security > Input Monitoring. The Logitech mice have not been
-tried on macOS.
+Wireless headset. macOS can ask for **Input Monitoring** before an application may open some HID
+interfaces; if a device stays unavailable, allow Macro Deck under System Settings > Privacy & Security >
+Input Monitoring. The Logitech mice have not been tried on macOS.
 
 ## Setting up devices
 

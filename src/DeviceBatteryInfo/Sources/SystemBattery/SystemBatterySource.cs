@@ -20,11 +20,10 @@ internal sealed class SystemBatterySource(ISystemPowerReader reader, BatterySlot
 internal sealed class SystemBatterySourceProvider(
     ISystemPowerReader reader,
     DeviceCatalog catalog,
-    ILogger logger,
-    TimeSpan? probeTimeout = null
+    ILogger logger
 ) : IBatterySourceProvider
 {
-    private readonly TimeSpan _probeTimeout = probeTimeout ?? TimeSpan.FromSeconds(5);
+    internal TimeSpan ProbeTimeout { get; init; } = TimeSpan.FromSeconds(5);
 
     private bool _hasBattery;
     private bool _probeFailed;
@@ -50,7 +49,7 @@ internal sealed class SystemBatterySourceProvider(
     private async Task<bool> ProbeAsync(CancellationToken cancellationToken)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(_probeTimeout);
+        timeout.CancelAfter(ProbeTimeout);
         try
         {
             _hasBattery = await reader.ReadAsync(timeout.Token) is not null;
