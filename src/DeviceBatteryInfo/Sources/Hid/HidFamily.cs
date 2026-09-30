@@ -29,11 +29,6 @@ internal sealed class HidFamily(
     )
     {
         var sources = new List<IBatterySource>();
-        if (!OperatingSystem.IsWindows())
-        {
-            return sources;
-        }
-
         foreach (var byModel in entries.GroupBy(e => e.Model.Id))
         {
             var model = (HidModel)byModel.First().Model;
@@ -107,17 +102,22 @@ internal sealed class HidFamily(
         protocol.ReportKind == HidReportKind.Feature
         || (
             candidate.OutputReportLength >= protocol.ReportLength
-            && candidate.UsagePage == protocol.UsagePage
-            && candidate.Usage == protocol.Usage
+            && candidate.HasUsage(protocol.UsagePage, protocol.Usage)
         );
 
-    // The USB serial identifies a unit. Dongles without one share a parent-instance token in the path
-    // (\\?\hid#vid_1532&pid_00b7&mi_00#8&1abcd&0&0000#{guid} -> "8&1abcd") across their interfaces.
-    private static string PhysicalUnitKey(HidCandidate candidate)
+    // A blank or all-zero serial identifies nothing, so the path stands in for it.
+    internal static string PhysicalUnitKey(HidCandidate candidate)
     {
-        if (!string.IsNullOrWhiteSpace(candidate.SerialNumber))
+        var serial = candidate.SerialNumber?.Trim();
+        if (!string.IsNullOrEmpty(serial) && serial.Any(c => c != '0'))
         {
-            return "s:" + candidate.SerialNumber.Trim().ToLowerInvariant();
+            return "s:" + serial.ToLowerInvariant();
+        }
+
+        var interfaceNode = candidate.Path.IndexOf("/IOUSBHostInterface@", StringComparison.Ordinal);
+        if (interfaceNode > 0)
+        {
+            return "m:" + candidate.Path[..interfaceNode].ToLowerInvariant();
         }
 
         var parts = candidate.Path.Split('#');

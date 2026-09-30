@@ -1,9 +1,10 @@
-using System.Runtime.InteropServices;
 using DeviceBatteryInfo.Core;
+using Serilog;
 
 namespace DeviceBatteryInfo.Sources.SystemBattery;
 
-internal sealed class SystemBatterySource(BatterySlot slot) : IBatterySource
+internal sealed class SystemBatterySource(ISystemPowerReader reader, BatterySlot slot)
+    : IBatterySource
 {
     public string Id { get; } = slot.Id;
 
@@ -11,43 +12,61 @@ internal sealed class SystemBatterySource(BatterySlot slot) : IBatterySource
 
     public BatterySourceKind Kind => BatterySourceKind.System;
 
-    public ValueTask<BatteryReading> ReadAsync(CancellationToken cancellationToken)
-    {
-        if (!NativePowerStatusApi.GetSystemPowerStatus(out var status))
-        {
-            throw new InvalidOperationException(
-                $"GetSystemPowerStatus failed (Win32 error {Marshal.GetLastPInvokeError()})."
-            );
-        }
-
-        return ValueTask.FromResult(SystemBatteryReadingFactory.Create(status));
-    }
+    public async ValueTask<BatteryReading> ReadAsync(CancellationToken cancellationToken) =>
+        await reader.ReadAsync(cancellationToken)
+        ?? throw new InvalidOperationException("This computer reports no battery.");
 }
 
-internal sealed class SystemBatterySourceProvider(DeviceCatalog catalog) : IBatterySourceProvider
+internal sealed class SystemBatterySourceProvider(
+    ISystemPowerReader reader,
+    DeviceCatalog catalog,
+    ILogger logger,
+    TimeSpan? probeTimeout = null
+) : IBatterySourceProvider
 {
-    private readonly DeviceCatalog _catalog = catalog;
+    private readonly TimeSpan _probeTimeout = probeTimeout ?? TimeSpan.FromSeconds(5);
 
-    public ValueTask<IReadOnlyList<IBatterySource>> DiscoverAsync(
+    private bool _hasBattery;
+    private bool _probeFailed;
+
+    public async ValueTask<IReadOnlyList<IBatterySource>> DiscoverAsync(
         CancellationToken cancellationToken
     )
     {
-        if (
-            !OperatingSystem.IsWindows()
-            || !NativePowerStatusApi.GetSystemPowerStatus(out var status)
-            || !SystemBatteryReadingFactory.HasBattery(status)
-        )
+        if (!_hasBattery && !await ProbeAsync(cancellationToken))
         {
-            return ValueTask.FromResult<IReadOnlyList<IBatterySource>>(
-                Array.Empty<IBatterySource>()
-            );
+            return [];
         }
 
-        var sources = _catalog
-            .Devices.Where(d => d.Type == DeviceType.System)
-            .Select(IBatterySource (d) => new SystemBatterySource(d))
-            .ToArray();
+        return
+        [
+            .. catalog
+                .Devices.Where(d => d.Type == DeviceType.System)
+                .Select(IBatterySource (d) => new SystemBatterySource(reader, d)),
+        ];
+    }
 
-        return ValueTask.FromResult<IReadOnlyList<IBatterySource>>(sources);
+    // A failing or hung reader must not stall discovery for the other providers, so it counts as no battery yet.
+    private async Task<bool> ProbeAsync(CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(_probeTimeout);
+        try
+        {
+            _hasBattery = await reader.ReadAsync(timeout.Token) is not null;
+            _probeFailed = false;
+        }
+        catch (Exception exception)
+            when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            if (!_probeFailed)
+            {
+                logger.Warning(exception, "The system battery could not be checked.");
+            }
+
+            _probeFailed = true;
+        }
+
+        return _hasBattery;
     }
 }

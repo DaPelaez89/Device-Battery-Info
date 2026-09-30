@@ -16,8 +16,15 @@ internal sealed record HidCandidate(
     int InputReportLength = 0,
     int OutputReportLength = 0,
     int? UsagePage = null,
-    int? Usage = null
-);
+    int? Usage = null,
+    IReadOnlyList<(int Page, int Usage)>? Usages = null
+)
+{
+    // macOS presents one device per interface with every top-level collection inside it, while Windows
+    // presents one device per collection, so the first usage alone is not enough to find a vendor collection.
+    public bool HasUsage(int? page, int? usage) =>
+        Usages is { } all ? all.Contains((page ?? -1, usage ?? -1)) : UsagePage == page && Usage == usage;
+}
 
 // Plumbing only: a protocol owns its report layout and passes finished request bytes in.
 internal interface IHidTransport
@@ -51,7 +58,7 @@ internal interface IHidTransport
     );
 }
 
-internal sealed partial class HidSharpTransport(ILogger logger) : IHidTransport
+internal sealed partial class HidSharpTransport : IHidTransport
 {
     // Keep the SetFeature/GetFeature window tight so a foreign poller's answer cannot land in it.
     private static readonly TimeSpan FirstSettleDelay = TimeSpan.FromMilliseconds(3);
@@ -61,9 +68,35 @@ internal sealed partial class HidSharpTransport(ILogger logger) : IHidTransport
     private static readonly TimeSpan MinRetryDelay = TimeSpan.FromMilliseconds(20);
     private static readonly TimeSpan MaxRetryDelay = TimeSpan.FromMilliseconds(120);
 
-    private readonly ILogger _logger = logger.ForContext<HidSharpTransport>();
+    private readonly ILogger _logger;
+    private readonly Func<string, IFeatureChannel> _openFeatureChannel;
+    private readonly bool _boundBlockingOpen;
 
-    [GeneratedRegex(@"mi_(?<n>[0-9a-fA-F]{1,2})", RegexOptions.IgnoreCase)]
+    public HidSharpTransport(ILogger logger)
+        : this(logger, OpenPlatformChannel, boundBlockingOpen: !OperatingSystem.IsWindows()) { }
+
+    // HidSharp retries a refused open for about a second on macOS, so there the whole exchange is
+    // bounded by its budget instead of blocking the poll.
+    internal HidSharpTransport(
+        ILogger logger,
+        Func<string, IFeatureChannel> openFeatureChannel,
+        bool boundBlockingOpen
+    )
+    {
+        _logger = logger.ForContext<HidSharpTransport>();
+        _openFeatureChannel = openFeatureChannel;
+        _boundBlockingOpen = boundBlockingOpen;
+    }
+
+    private static IFeatureChannel OpenPlatformChannel(string devicePath) =>
+        OperatingSystem.IsWindows()
+            ? new NativeFeatureChannel(NativeHid.Open(devicePath))
+            : new HidSharpFeatureChannel(devicePath);
+
+    [GeneratedRegex(
+        @"mi_(?<n>[0-9a-fA-F]{1,2})|IOUSBHostInterface@(?<n>[0-9a-fA-F]+)",
+        RegexOptions.IgnoreCase
+    )]
     private static partial Regex InterfacePattern();
 
     public IReadOnlyList<HidCandidate> FindCandidates(
@@ -91,7 +124,59 @@ internal sealed partial class HidSharpTransport(ILogger logger) : IHidTransport
             .ThenBy(c => c.InterfaceNumber ?? int.MaxValue)
             .ToArray();
 
-    public async Task<byte[]> ExchangeAsync(
+    public Task<byte[]> ExchangeAsync(
+        string devicePath,
+        byte[] request,
+        Func<byte[], bool> isComplete,
+        TimeSpan budget,
+        CancellationToken cancellationToken
+    ) =>
+        BoundAsync(
+            $"HID feature-report exchange on {devicePath}",
+            budget,
+            ct => ExchangeFeatureAsync(devicePath, request, isComplete, budget, ct),
+            cancellationToken
+        );
+
+    // Budget expiry is an InvalidOperationException, never a cancellation: HidFamily and the poll loop
+    // let OperationCanceledException escape and would skip every other source of the cycle.
+    internal async Task<byte[]> BoundAsync(
+        string operation,
+        TimeSpan budget,
+        Func<CancellationToken, Task<byte[]>> work,
+        CancellationToken cancellationToken
+    )
+    {
+        if (!_boundBlockingOpen)
+        {
+            return await work(cancellationToken);
+        }
+
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var task = Task.Run(() => work(linked.Token), CancellationToken.None);
+        try
+        {
+            return await task.WaitAsync(budget, cancellationToken);
+        }
+        catch (TimeoutException) when (!task.IsCompleted)
+        {
+            await linked.CancelAsync();
+            throw new InvalidOperationException(
+                $"{operation} did not complete within {budget.TotalMilliseconds} ms."
+            );
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new InvalidOperationException($"{operation} was cancelled before it completed.");
+        }
+        catch (OperationCanceledException)
+        {
+            await linked.CancelAsync();
+            throw;
+        }
+    }
+
+    private async Task<byte[]> ExchangeFeatureAsync(
         string devicePath,
         byte[] request,
         Func<byte[], bool> isComplete,
@@ -99,11 +184,6 @@ internal sealed partial class HidSharpTransport(ILogger logger) : IHidTransport
         CancellationToken cancellationToken
     )
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            throw new PlatformNotSupportedException("HID feature reports are Windows-only in v1.");
-        }
-
         var reportLength =
             DeviceList
                 .Local.GetHidDevices()
@@ -119,17 +199,17 @@ internal sealed partial class HidSharpTransport(ILogger logger) : IHidTransport
         var buffer = new byte[reportLength];
         request.CopyTo(buffer, offset);
 
-        using var handle = NativeHid.Open(devicePath);
+        using var channel = _openFeatureChannel(devicePath);
 
         var clock = Stopwatch.StartNew();
         for (var attempt = 1; ; attempt++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            NativeHid.SetFeature(handle, buffer);
+            channel.Set(buffer);
             await Task.Delay(SettleDelay(attempt), cancellationToken);
 
             var response = new byte[reportLength];
-            NativeHid.GetFeature(handle, response);
+            channel.Get(response);
             if (isComplete(response))
             {
                 return response;
@@ -173,7 +253,21 @@ internal sealed partial class HidSharpTransport(ILogger logger) : IHidTransport
 
     private const int ReportReadTimeoutMs = 250;
 
-    public async Task<byte[]> ExchangeReportsAsync(
+    public Task<byte[]> ExchangeReportsAsync(
+        string devicePath,
+        byte[] request,
+        Func<byte[], bool> isComplete,
+        TimeSpan budget,
+        CancellationToken cancellationToken
+    ) =>
+        BoundAsync(
+            $"HID report exchange on {devicePath}",
+            budget,
+            ct => ExchangeInputOutputReportsAsync(devicePath, request, isComplete, budget, ct),
+            cancellationToken
+        );
+
+    private async Task<byte[]> ExchangeInputOutputReportsAsync(
         string devicePath,
         byte[] request,
         Func<byte[], bool> isComplete,
@@ -181,11 +275,6 @@ internal sealed partial class HidSharpTransport(ILogger logger) : IHidTransport
         CancellationToken cancellationToken
     )
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            throw new PlatformNotSupportedException("HID reports are Windows-only in v1.");
-        }
-
         var device =
             DeviceList
                 .Local.GetHidDevices()
@@ -197,9 +286,10 @@ internal sealed partial class HidSharpTransport(ILogger logger) : IHidTransport
             () =>
             {
                 using var stream = device.Open();
+                cancellationToken.ThrowIfCancellationRequested();
                 stream.ReadTimeout = ReportReadTimeoutMs;
 
-                var output = new byte[Math.Max(device.GetMaxOutputReportLength(), request.Length)];
+                var output = new byte[Math.Max(OutputReportLength(device, request), request.Length)];
                 request.CopyTo(output, 0);
                 stream.Write(output);
 
@@ -238,6 +328,47 @@ internal sealed partial class HidSharpTransport(ILogger logger) : IHidTransport
         );
     }
 
+    // Off Windows one device carries every collection, so its longest output report is not the length of the
+    // report being sent and the device would ignore a padded one.
+    private static int OutputReportLength(HidDevice device, byte[] request)
+    {
+        var longest = device.GetMaxOutputReportLength();
+        if (OperatingSystem.IsWindows() || request.Length == 0)
+        {
+            return longest;
+        }
+
+        try
+        {
+            return OutputReportLength(
+                device
+                    .GetReportDescriptor()
+                    .DeviceItems.SelectMany(i => i.OutputReports)
+                    .Select(r => (r.ReportID, r.Length)),
+                request[0],
+                longest
+            );
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            return longest;
+        }
+    }
+
+    internal static int OutputReportLength(
+        IEnumerable<(byte ReportId, int Length)> reports,
+        byte reportId,
+        int fallback
+    ) => reports.Where(r => r.ReportId == reportId).Select(r => r.Length).FirstOrDefault(fallback);
+
+    internal static int? ParseInterfaceNumber(string devicePath)
+    {
+        var match = InterfacePattern().Match(devicePath);
+        return match.Success
+            ? int.Parse(match.Groups["n"].Value, System.Globalization.NumberStyles.HexNumber, null)
+            : null;
+    }
+
     internal static HidCandidate Describe(HidDevice device, bool withUsage = false)
     {
         int featureLength;
@@ -250,10 +381,8 @@ internal sealed partial class HidSharpTransport(ILogger logger) : IHidTransport
             featureLength = 0;
         }
 
-        var match = InterfacePattern().Match(device.DevicePath);
-        int? interfaceNumber = match.Success
-            ? int.Parse(match.Groups["n"].Value, System.Globalization.NumberStyles.HexNumber, null)
-            : null;
+        var interfaceNumber = ParseInterfaceNumber(device.DevicePath);
+        var usages = withUsage ? TopLevelUsages(device) : null;
 
         return new HidCandidate(
             device.DevicePath,
@@ -265,8 +394,9 @@ internal sealed partial class HidSharpTransport(ILogger logger) : IHidTransport
             SafeSerial(device),
             SafeLength(device.GetMaxInputReportLength),
             SafeLength(device.GetMaxOutputReportLength),
-            withUsage ? TopLevelUsage(device)?.Page : null,
-            withUsage ? TopLevelUsage(device)?.Usage : null
+            usages is { Count: > 0 } ? usages[0].Page : null,
+            usages is { Count: > 0 } ? usages[0].Usage : null,
+            usages
         );
     }
 
@@ -282,16 +412,17 @@ internal sealed partial class HidSharpTransport(ILogger logger) : IHidTransport
         }
     }
 
-    private static (int Page, int Usage)? TopLevelUsage(HidDevice device)
+    private static IReadOnlyList<(int Page, int Usage)>? TopLevelUsages(HidDevice device)
     {
         try
         {
-            var usage = device
-                .GetReportDescriptor()
-                .DeviceItems.SelectMany(i => i.Usages.GetAllValues())
-                .Cast<uint?>()
-                .FirstOrDefault();
-            return usage is { } value ? ((int)(value >> 16), (int)(value & 0xFFFF)) : null;
+            return
+            [
+                .. device
+                    .GetReportDescriptor()
+                    .DeviceItems.SelectMany(i => i.Usages.GetAllValues())
+                    .Select(value => ((int)(value >> 16), (int)(value & 0xFFFF))),
+            ];
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {

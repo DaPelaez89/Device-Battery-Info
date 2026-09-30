@@ -2,10 +2,10 @@ using DeviceBatteryInfo.Core;
 
 namespace DeviceBatteryInfo.Sources.Bluetooth;
 
-internal sealed class BluetoothBatterySource(IPnpBatteryReader reader, BatterySlot slot)
+internal sealed class BluetoothBatterySource(IBluetoothBatteryReader reader, BatterySlot slot)
     : IBatterySource
 {
-    private readonly IPnpBatteryReader _reader = reader;
+    private readonly IBluetoothBatteryReader _reader = reader;
     private readonly string _friendlyName = slot.BluetoothFriendlyName!;
 
     public string Id { get; } = slot.Id;
@@ -21,31 +21,24 @@ internal sealed class BluetoothBatterySource(IPnpBatteryReader reader, BatterySl
 
         return percent is null
             ? throw new InvalidOperationException(
-                $"Windows has no cached battery reading for '{_friendlyName}'."
+                $"The system has no battery reading for '{_friendlyName}'."
             )
             : new BatteryReading { Percent = percent, Status = BatteryStatus.Discharging };
     }
 }
 
 internal sealed class BluetoothBatterySourceProvider(
-    IPnpBatteryReader reader,
+    IBluetoothBatteryReader reader,
     DeviceCatalog catalog
 ) : IBatterySourceProvider
 {
-    private readonly IPnpBatteryReader _reader = reader;
+    private readonly IBluetoothBatteryReader _reader = reader;
     private readonly DeviceCatalog _catalog = catalog;
 
     public ValueTask<IReadOnlyList<IBatterySource>> DiscoverAsync(
         CancellationToken cancellationToken
     )
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            return ValueTask.FromResult<IReadOnlyList<IBatterySource>>(
-                Array.Empty<IBatterySource>()
-            );
-        }
-
         var sources = _catalog
             .Devices.Where(d =>
                 d.Type == DeviceType.Bluetooth

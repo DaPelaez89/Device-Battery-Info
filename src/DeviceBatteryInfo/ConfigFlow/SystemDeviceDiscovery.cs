@@ -5,9 +5,9 @@ using MacroDeck.Sdk.Android;
 
 namespace DeviceBatteryInfo.ConfigFlow;
 
-internal sealed class WindowsDeviceDiscovery(
+internal sealed class SystemDeviceDiscovery(
     IHidTransport hidTransport,
-    IPnpBatteryReader pnpReader,
+    IBluetoothBatteryReader bluetoothReader,
     IAndroidDeviceManager android
 ) : IDeviceDiscovery
 {
@@ -15,7 +15,7 @@ internal sealed class WindowsDeviceDiscovery(
         CancellationToken cancellationToken
     )
     {
-        var devices = await pnpReader.ListDevicesAsync(cancellationToken);
+        var devices = await bluetoothReader.ListDevicesAsync(cancellationToken);
         return devices
             .Select(d => new BluetoothDeviceCandidate(
                 d.Name,

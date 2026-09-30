@@ -1,8 +1,8 @@
 # Device Battery Info
 
-A [Macro Deck 3](https://macro-deck.app/) plugin that shows the battery level of your PC, your
-Android phone, your Bluetooth audio devices and a growing list of specific gaming peripherals, right
-on your deck.
+A [Macro Deck 3](https://macro-deck.app/) plugin that shows the battery level of your computer
+(Windows or macOS), your Android phone, your Bluetooth devices and a growing list of specific gaming
+peripherals, right on your deck.
 
 ## Contents
 
@@ -37,11 +37,19 @@ minutes of history and starts over whenever the plugin restarts.
 
 These work with whatever hardware of that kind you have.
 
-| Source                         | How it reads                        | Percent | Charging |
-| ------------------------------ | ----------------------------------- | ------- | -------- |
-| This PC / laptop               | Win32 `GetSystemPowerStatus`        | yes     | yes      |
-| Android phone                  | Macro Deck's own adb connection     | yes     | yes      |
-| Windows Bluetooth audio device | PnP battery property via PowerShell | yes     | rarely   |
+| Source                         | Platform | How it reads                                    | Percent | Charging |
+| ------------------------------ | -------- | ----------------------------------------------- | ------- | -------- |
+| This computer / laptop         | Windows  | Win32 `GetSystemPowerStatus`                    | yes     | yes      |
+| This computer / laptop         | macOS    | `pmset -g batt`                                 | yes     | yes      |
+| Android phone                  | both     | Macro Deck's own adb connection                 | yes     | yes      |
+| Bluetooth audio device         | Windows  | PnP battery property via PowerShell             | yes     | rarely   |
+| Bluetooth device               | macOS    | `system_profiler` plus `pmset -g accps`         | yes     | no       |
+
+On macOS a Bluetooth device reports one level: its main battery, or the lower of the left and right
+earbud (the case is ignored). Connected devices that `system_profiler` lists without a battery, such as many
+Logitech mice, get their level from `pmset -g accps`, which is where macOS itself reads accessory batteries.
+Only devices that are connected right now are read, because macOS keeps a stale level for devices that are not. A Mac that is held below full on AC by Optimized Battery Charging
+reports its level with an unknown charging state, since it is neither charging nor discharging.
 
 ### Specific devices ("Other devices")
 
@@ -68,16 +76,24 @@ Download the packed `.macroDeckPlugin` file from the
 [latest release](https://github.com/PyFlat-JR/Device-Battery-Info/releases) (or from the store
 listing, once published) and install it from Macro Deck's plugin manager.
 
-The plugin currently ships for **Windows x64** only, because several sources are Windows-specific
-(Win32 power status, PnP/Bluetooth via PowerShell). The HID path used by the mice and headsets and the
-`adb` phone source have no Windows dependency, so a macOS/Linux build is plausible future work. See
-[Adding a device](docs/adding-a-device.md) if you want to help port a source.
+The plugin ships for **Windows x64** and **macOS on Apple silicon**. Intel Macs and Linux are not
+supported. On macOS the Bluetooth source relies on the `device_connected` layout of `system_profiler`,
+which macOS 12 and later are expected to produce (checked on macOS 27). A connected device with a battery in
+`system_profiler` itself, such as earbuds, has not been seen on real hardware; a Logitech MX Master 3S was read
+through `pmset -g accps`.
+
+USB HID devices (the Razer and Logitech models below) are read on macOS through the same HID code as on
+Windows. That was checked on macOS with a Razer Basilisk V3 Pro (cable and dongle) and a Logitech G Pro X
+Wireless headset. macOS can ask for **Input
+Monitoring** before an application may open some HID interfaces; if a device stays unavailable, allow
+Macro Deck under System Settings > Privacy & Security > Input Monitoring. The Logitech mice have not been
+tried on macOS.
 
 ## Setting up devices
 
 Devices are managed inside Macro Deck through the plugin's config flow. Add one entry per device:
 
-1. Pick a category: **This PC**, **Android phone** (over adb), **Windows Bluetooth device** or
+1. Pick a category: **This computer**, **Android phone** (over adb), **Bluetooth device** or
    **Other devices**.
 2. Fill in the one thing that category needs, from a list where it can be discovered: a device name
    for Bluetooth, a phone for adb (each list shows the device's current battery level). For
@@ -90,6 +106,9 @@ then the phone list stays empty and the phone reads as unavailable. The list sho
 Deck's adb sees; one marked as needing authorization needs the USB debugging prompt accepted on the
 phone. A phone that is not attached yet can be entered by hand: a USB phone by its serial, a wireless
 one by `host:port`, which the plugin connects to on its own (Android 11+ needs the phone paired first).
+
+A Bluetooth device is found by the name the operating system shows for it. An entry that is moved from
+Windows to macOS keeps working only if that name is the same on both, so rename it in the entry otherwise.
 
 Editing an existing entry pre-fills its fields. There is no default device: a fresh install shows
 nothing until you add one, and the widgets say so until then.
@@ -137,7 +156,7 @@ the tag starts the release workflow. On Windows it needs GNU make and Git Bash's
 ```
 src/DeviceBatteryInfo/
   Program.cs               builder chain: bind options, register registry + sources + poll loop
-  manifest.json            identity, icon, win-x64 entrypoint
+  manifest.json            identity, icon, win-x64 and osx-arm64 entrypoints
   BatteryIntegration.cs    IPluginIntegration + IEventProvider + IConfigFlowProvider
   BatteryIntegration.Widgets.cs   the same partial class: IWidgetTypeProvider + IUiProvider
   ConfigFlow/              the device config flow (add/edit steps, discovery, the "Other devices" catalog)

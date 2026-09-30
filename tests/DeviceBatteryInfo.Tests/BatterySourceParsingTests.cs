@@ -106,7 +106,7 @@ public sealed class AdbBatterySourceTests
 public sealed class AndroidDeviceDiscoveryTests
 {
     // Only the Android listing is exercised, so the HID and PnP readers are never touched.
-    private static WindowsDeviceDiscovery Discovery(FakeAndroidDeviceManager android) =>
+    private static SystemDeviceDiscovery Discovery(FakeAndroidDeviceManager android) =>
         new(null!, null!, android);
 
     [Test]

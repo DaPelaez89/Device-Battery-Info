@@ -13,8 +13,18 @@ internal static class BatterySourceRegistration
     public static IServiceCollection AddBatterySources(this IServiceCollection services)
     {
         services.AddSingleton<IHidTransport, HidSharpTransport>();
-        services.AddSingleton<IPnpBatteryReader, PowerShellPnpBatteryReader>();
-        services.AddSingleton<IDeviceDiscovery, WindowsDeviceDiscovery>();
+        services.AddSingleton<IDeviceDiscovery, SystemDeviceDiscovery>();
+
+        if (OperatingSystem.IsMacOS())
+        {
+            services.AddSingleton<IBluetoothBatteryReader, MacBluetoothBatteryReader>();
+            services.AddSingleton<ISystemPowerReader, MacSystemPowerReader>();
+        }
+        else
+        {
+            services.AddSingleton<IBluetoothBatteryReader, PowerShellPnpBatteryReader>();
+            services.AddSingleton<ISystemPowerReader, WindowsSystemPowerReader>();
+        }
 
         services.AddSingleton<IBatterySourceProvider, SystemBatterySourceProvider>();
         services.AddSingleton<IBatterySourceProvider, AdbBatterySourceProvider>();
