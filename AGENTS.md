@@ -184,7 +184,10 @@ Design knowledge that is not obvious from the code alone:
   and `PercentPerHour` into a signed rate for automations. History is in-memory only and is lost on
   every plugin restart or update by design - it self-heals within `MinWindow`, which is simpler than
   persisting it under `MACRO_DECK_PLUGIN_DATA_DIRECTORY`. The widget caption falls back to the trend
-  text when there is no time-to-full to show (most sources never report one), and both the `trend`
+  text when there is no time-to-full to show (most sources never report one). The rings layout has no
+  caption; its own `showRingTrend` flag (default off) adds a muted trend line under each ring, below
+  the name, and `Arrange` reserves room for it. It is a separate key rather than `showTrend` because
+  released widgets already store `showTrend: true`, which would shrink every existing ring. Both the `trend`
   and `trend-rate` variable suffixes are public API like every other field suffix in
   `BatteryVariableCatalog`.
 - **Bluetooth battery data lives on a different PnP node than the one the user picks, and is only

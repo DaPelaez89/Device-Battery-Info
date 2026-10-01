@@ -161,7 +161,8 @@ internal sealed record BatteryWidgetOptions(
     BatteryWidgetLayout Layout = BatteryWidgetLayout.Rings,
     bool ShowNames = false,
     BatteryColorScheme Colors = BatteryColorScheme.LevelsCharging,
-    BatteryListAlignment ListAlign = BatteryListAlignment.Top
+    BatteryListAlignment ListAlign = BatteryListAlignment.Top,
+    bool ShowRingTrend = false
 )
 {
     public static readonly BatteryWidgetOptions Default = new(

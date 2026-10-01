@@ -24,6 +24,7 @@ internal static class BatteryWidgetView
     private const double GaugeInset = (BoltSize - RingThickness) / 2;
     private const double ChargingGapDegrees = 20;
     private const double NameShare = 0.24;
+    private const double TrendShare = 0.19;
 
     // An aspect range of the rings' box and the aspect the ring sizes assume for it.
     private static readonly (double? Min, double? Max, double Aspect)[] AspectBuckets =
@@ -169,7 +170,13 @@ internal static class BatteryWidgetView
     )
     {
         RingArrangement Arrangement() =>
-            Arrange(state.Value.Rows.Count, aspect, hasTitle, state.Value.Options.ShowNames);
+            Arrange(
+                state.Value.Rows.Count,
+                aspect,
+                hasTitle,
+                state.Value.Options.ShowNames,
+                state.Value.Options.ShowRingTrend
+            );
 
         return new UiGrid
         {
@@ -194,13 +201,19 @@ internal static class BatteryWidgetView
     internal readonly record struct RingArrangement(int Columns, int Rows, double Diameter);
 
     // A tie goes to more columns, so two rings sit side by side.
-    internal static RingArrangement Arrange(int count, double aspect, bool hasTitle, bool showNames)
+    internal static RingArrangement Arrange(
+        int count,
+        double aspect,
+        bool hasTitle,
+        bool showNames,
+        bool showTrend = false
+    )
     {
         var shortSide =
             1 - (2 * EdgeInset) - (hasTitle && aspect >= 1 ? TitleHeight : 0);
         var width = Math.Max(aspect, 1) * shortSide;
         var height = Math.Max(1 / aspect, 1) * shortSide;
-        var labelFactor = showNames ? 1 + NameShare : 1;
+        var labelFactor = 1 + (showNames ? NameShare : 0) + (showTrend ? TrendShare : 0);
 
         var devices = Math.Max(count, 1);
         var best = new RingArrangement(1, 1, 0);
@@ -241,6 +254,23 @@ internal static class BatteryWidgetView
                     Size = OfDiameter(diameter, 0.15),
                     Role = UiComponentTextRoles.Secondary,
                     Weight = UiComponentTextWeights.Medium,
+                    Align = UiComponentAlignments.Center,
+                    MaxLines = 1,
+                    Wrap = false,
+                }
+            );
+        }
+
+        // A placeholder keeps every ring in a grid row at the same height while a trend is withheld.
+        if (options.ShowRingTrend)
+        {
+            children.Add(
+                new UiTextRun
+                {
+                    Key = "trend",
+                    Text = row.Stale || string.IsNullOrEmpty(row.Trend) ? "–" : row.Trend,
+                    Size = OfDiameter(diameter, 0.12),
+                    Role = UiComponentTextRoles.Muted,
                     Align = UiComponentAlignments.Center,
                     MaxLines = 1,
                     Wrap = false,

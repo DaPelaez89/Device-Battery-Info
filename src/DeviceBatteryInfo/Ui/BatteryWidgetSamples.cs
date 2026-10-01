@@ -53,6 +53,35 @@ internal static class BatteryWidgetSamples
             }
         );
 
+    public static BatteryWidgetModel PanelTrend() =>
+        new(
+            [
+                Row(
+                    "phone",
+                    "Phone",
+                    47,
+                    BatteryStatus.Discharging,
+                    BatterySourceKind.Phone,
+                    trend: "-13%/1h"
+                ),
+                Row(
+                    "mouse",
+                    "Mouse",
+                    82,
+                    BatteryStatus.Charging,
+                    BatterySourceKind.Mouse,
+                    charging: true,
+                    trend: "+28%/30m"
+                ),
+                Row("headset", "Headset", 100, BatteryStatus.Full, BatterySourceKind.Headset),
+            ],
+            BatteryWidgetOptions.Default with
+            {
+                ShowNames = true,
+                ShowRingTrend = true,
+            }
+        );
+
     public static BatteryWidgetModel PanelList() =>
         new(
             [

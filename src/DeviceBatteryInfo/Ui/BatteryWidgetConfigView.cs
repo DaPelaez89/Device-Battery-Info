@@ -26,6 +26,7 @@ internal static class BatteryWidgetConfigView
         var showCharging = new UiState<bool>(current.ShowCharging);
         var showTimeToFull = new UiState<bool>(current.ShowTimeToFull);
         var showTrend = new UiState<bool>(current.ShowTrend);
+        var showRingTrend = new UiState<bool>(current.ShowRingTrend);
         var lowThreshold = new UiState<double>(current.LowThreshold);
         var sort = new UiState<string>(BatteryWidgetOptions.SortValue(current.Sort));
         var title = new UiState<string>(current.Title);
@@ -38,7 +39,7 @@ internal static class BatteryWidgetConfigView
             flows.ValueKind == JsonValueKind.Array ? flows : EmptyFlows
         );
 
-        // The rings layout has no room for a caption.
+        // The rings layout has no room for a caption, only a short trend line.
         UiValue<UiVisibleWhen> OnlyFor(string layoutValue) =>
             isPanel
                 ? UiValue.Of(
@@ -150,14 +151,6 @@ internal static class BatteryWidgetConfigView
                     }
                 )
             );
-            appearance.Add(
-                Toggle(
-                    "showNames",
-                    Strings.Widgets.Config.ShowNames.Label(),
-                    showNames,
-                    OnlyFor(BatteryWidgetOptions.LayoutRings)
-                )
-            );
         }
 
         appearance.Add(
@@ -208,6 +201,26 @@ internal static class BatteryWidgetConfigView
                 ),
             ]
         );
+
+        if (isPanel)
+        {
+            appearance.Add(
+                Toggle(
+                    "showNames",
+                    Strings.Widgets.Config.ShowNames.Label(),
+                    showNames,
+                    OnlyFor(BatteryWidgetOptions.LayoutRings)
+                )
+            );
+            appearance.Add(
+                Toggle(
+                    "showRingTrend",
+                    Strings.Widgets.Config.ShowTrend.Label(),
+                    showRingTrend,
+                    OnlyFor(BatteryWidgetOptions.LayoutRings)
+                )
+            );
+        }
 
         return new UiWidgetConfiguration
         {

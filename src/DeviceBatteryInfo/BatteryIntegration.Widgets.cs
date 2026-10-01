@@ -307,7 +307,8 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
             layout,
             Flag("showNames", false),
             colors,
-            listAlign
+            listAlign,
+            Flag("showRingTrend", false)
         );
     }
 

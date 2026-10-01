@@ -234,7 +234,7 @@ public sealed class BatteryWidgetViewTests
                 r.Declaration.Id.Contains(nameof(BatteryWidgetPreviews), StringComparison.Ordinal)
             )
             .ToArray();
-        Assert.That(ours, Has.Length.EqualTo(8));
+        Assert.That(ours, Has.Length.EqualTo(9));
         using (Assert.EnterMultipleScope())
         {
             Assert.That(
@@ -283,7 +283,7 @@ public sealed class BatteryWidgetViewTests
     {
         var rows = new BatteryWidgetRow[]
         {
-            new("a", "A", 40, BatteryStatus.Charging, true, false, "0:20", Kind: BatterySourceKind.Earbuds),
+            new("a", "A", 40, BatteryStatus.Charging, true, false, "0:20", "+28%/30m", BatterySourceKind.Earbuds),
             new("b", "B", 70, BatteryStatus.Discharging, false, true, null, Kind: BatterySourceKind.Pen),
             new("c", "C", null, BatteryStatus.Unknown, false, false, null),
         };
@@ -291,6 +291,7 @@ public sealed class BatteryWidgetViewTests
         {
             Layout = BatteryWidgetOptions.ParseLayout(layout),
             ShowNames = true,
+            ShowRingTrend = true,
         };
         var state = new UiState<BatteryWidgetModel>(new BatteryWidgetModel(rows, options));
 
@@ -320,6 +321,17 @@ public sealed class BatteryWidgetViewTests
             Assert.That(arrangement.Rows, Is.EqualTo(rows));
             Assert.That(arrangement.Diameter, Is.GreaterThan(0).And.LessThanOrEqualTo(1));
         }
+    }
+
+    [Test]
+    public void Labels_under_the_rings_shrink_them()
+    {
+        var bare = BatteryWidgetView.Arrange(3, 1.0, hasTitle: false, showNames: false);
+        var named = BatteryWidgetView.Arrange(3, 1.0, hasTitle: false, showNames: true);
+        var both = BatteryWidgetView.Arrange(3, 1.0, hasTitle: false, showNames: true, showTrend: true);
+
+        Assert.That(both.Diameter, Is.LessThan(named.Diameter));
+        Assert.That(named.Diameter, Is.LessThan(bare.Diameter));
     }
 
     [Test]

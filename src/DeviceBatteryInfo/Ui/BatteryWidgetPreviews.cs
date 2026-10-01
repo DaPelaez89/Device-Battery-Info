@@ -18,6 +18,13 @@ internal static class BatteryWidgetPreviews
     )]
     public static UiElement PanelNamed() => PanelOf(BatteryWidgetSamples.PanelNamed());
 
+    [UiPreview(
+        "Panel - names and trend",
+        View = nameof(BatteryWidgetView),
+        Profile = UiPreviewProfiles.Widget
+    )]
+    public static UiElement PanelTrend() => PanelOf(BatteryWidgetSamples.PanelTrend());
+
     [UiPreview("Panel - list", View = nameof(BatteryWidgetView), Profile = UiPreviewProfiles.Widget)]
     public static UiElement PanelList() => PanelOf(BatteryWidgetSamples.PanelList());
 

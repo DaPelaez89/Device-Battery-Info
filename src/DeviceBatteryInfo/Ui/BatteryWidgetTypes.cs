@@ -74,7 +74,7 @@ internal static class BatteryWidgetTypes
             );
 
     private const string DefaultData =
-        """{"sourceIds":[],"showBar":true,"showPercent":true,"showCharging":true,"showTimeToFull":true,"showTrend":true,"lowThreshold":20,"sort":"manual","title":"","layout":"rings","showNames":false,"colors":"levels-charging","listAlign":"top"}""";
+        """{"sourceIds":[],"showBar":true,"showPercent":true,"showCharging":true,"showTimeToFull":true,"showTrend":true,"lowThreshold":20,"sort":"manual","title":"","layout":"rings","showNames":false,"colors":"levels-charging","listAlign":"top","showRingTrend":false}""";
 
     private const string Schema = """
         {
@@ -129,6 +129,11 @@ internal static class BatteryWidgetTypes
               "type": "boolean",
               "default": false,
               "description": "Show each device's name under its ring. The list layout and the tile always show names."
+            },
+            "showRingTrend": {
+              "type": "boolean",
+              "default": false,
+              "description": "Show the recent charge/drain rate (for example -13%/1h) under each ring, below the name when names are shown. The list layout uses showTrend instead."
             },
             "title": {
               "type": "string",
