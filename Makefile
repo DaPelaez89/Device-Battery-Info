@@ -2,11 +2,16 @@ PROJECT  := src/DeviceBatteryInfo
 MANIFEST := $(PROJECT)/manifest.json
 
 STATE    := $(PROJECT)/.macrodeck-dev-state
-RUN      := macrodeck-plugin run --project $(PROJECT) --state-directory $(STATE)
+
+UTF8     := $(if $(filter Windows_NT,$(OS)),chcp.com 65001 >/dev/null &&)
+RUN      := $(UTF8) macrodeck-plugin run --project $(PROJECT) --state-directory $(STATE)
+
 # The SDK version, for keeping the macrodeck-plugin CLI in step. Read inside recipes rather than with
 # $(shell): GnuWin32's make 3.81 sometimes runs $(shell) with an empty command line.
 SDK      := grep -o 'MacroDeck.Sdk" Version="[^"]*' Directory.Packages.props | cut -d'"' -f3
 TESTS    := dotnet test DeviceBatteryInfo.slnx --configuration Release --filter "Category!=Hardware"
+
+RID      := $(if $(filter Windows_NT,$(OS)),win-x64,osx-arm64)
 
 .DEFAULT_GOAL := help
 .PHONY: help cli build test test-hardware run watch stub pack conformance update release
@@ -19,7 +24,7 @@ help:
 	@echo "make run            run the plugin against the running Macro Deck"
 	@echo "make watch          the same, with hot reload / restart on every saved change"
 	@echo "make stub           run the plugin against a disposable stub host (no Macro Deck needed)"
-	@echo "make pack           build the .macroDeckPlugin into artifacts/ and inspect it"
+	@echo "make pack           build this platform's .macroDeckPlugin ($(RID)) into artifacts/ and inspect it"
 	@echo "make conformance    run the conformance suite, report in conformance.md"
 	@echo "make update         bump every package to its newest release (review the diff)"
 	@echo "make release VERSION=x.y.z"
@@ -44,11 +49,11 @@ watch:
 	$(RUN) --watch
 
 stub:
-	macrodeck-plugin run --project $(PROJECT) --stub-host
+	$(UTF8) macrodeck-plugin run --project $(PROJECT) --stub-host
 
 pack:
 	rm -f artifacts/*.macroDeckPlugin
-	macrodeck-plugin build --source $(PROJECT) --output ./artifacts
+	macrodeck-plugin build --source $(PROJECT) --rid $(RID) --output ./artifacts
 	macrodeck-plugin inspect --artifact "$$(ls artifacts/*.macroDeckPlugin)"
 
 conformance:
