@@ -24,8 +24,7 @@ internal static class BatteryWidgetView
     private const double GaugeInset = (BoltSize - RingThickness) / 2;
     private const double ChargingGapDegrees = 20;
 
-    // The face sits inside the ring's inner circle (radius 0.35): with the percentage, the corners of
-    // a "100%" line under the glyph stay about 0.32 from the centre.
+    // Small enough that "100%" clears the ring's inner circle.
     private const double FaceGlyph = 0.28;
     private const double FaceGlyphAlone = 0.44;
     private const double FacePercent = 0.16;
@@ -101,7 +100,7 @@ internal static class BatteryWidgetView
                 Condition = () => state.Value.Rows.Count > 0,
                 Content = () =>
                     options.Layout == BatteryWidgetLayout.List
-                        ? ListBody(state)
+                        ? ListBody(state, hasTitle)
                         : RingBody(state, hasTitle),
             }
         );
@@ -421,10 +420,78 @@ internal static class BatteryWidgetView
             },
         };
 
-    private static UiStack ListBody(UiState<BatteryWidgetModel> state) =>
+    // Fractions of the view basis.
+    private const double ListGlyph = 0.1;
+    private const double ListBolt = 0.075;
+    private const double ListGap = 0.03;
+    private const double NameSize = 0.082;
+    private const double CaptionSize = 0.058;
+    private const double CaptionGap = 0.02;
+    private const double PercentSize = 0.09;
+    // The real padding can exceed EdgeInset.
+    private const double FitSlack = 0.02;
+
+    // The host takes the first matching variant, so each bucket ends where the next begins.
+    private static readonly double[] ListAspects = [1.15, 1.3, 1.5, 1.75, 2.0, 2.4, 2.8, 3.4];
+
+    private static UiResponsive ListBody(UiState<BatteryWidgetModel> state, bool hasTitle) =>
         new()
         {
             Key = "body",
+            Fill = true,
+            Default = ListRows(state, "rows-1", ListWidth(1, hasTitle)),
+            Variants = ListAspects
+                .Select(
+                    (aspect, index) =>
+                        new UiResponsiveVariant
+                        {
+                            MinAspect = aspect,
+                            MaxAspect = index + 1 < ListAspects.Length ? ListAspects[index + 1] : null,
+                            Content = ListRows(state, $"rows-{index + 2}", ListWidth(aspect, hasTitle)),
+                        }
+                )
+                .ToArray(),
+        };
+
+    // The basis is the widget's short side.
+    internal static double ListWidth(double aspect, bool hasTitle)
+    {
+        var bodyHeight = 1 - (2 * EdgeInset) - (hasTitle ? TitleHeight : 0);
+        return Math.Max(1 - (2 * EdgeInset), aspect * bodyHeight);
+    }
+
+    // Texts in a row have no shrink priority, so an overlong caption truncates the name too.
+    internal static bool CaptionFitsInline(
+        BatteryWidgetRow row,
+        BatteryWidgetOptions options,
+        double width
+    )
+    {
+        if (Caption(row, options) is not { } caption)
+        {
+            return true;
+        }
+
+        var bolt = options.ShowCharging && row.Charging ? ListBolt + ListGap : 0;
+        var percent = options.ShowPercent ? PercentWidth(row) + ListGap : 0;
+        var available = width - ListGlyph - ListGap - bolt - percent;
+        var needed =
+            TextWidth.Of(row.Name, NameSize) + CaptionGap + TextWidth.Of(caption, CaptionSize);
+        return needed + FitSlack <= available;
+    }
+
+    // Hugs the text, so the bolt sits next to the number.
+    private static double PercentWidth(BatteryWidgetRow row) =>
+        TextWidth.Of(row.PercentText(), PercentSize) + 0.01;
+
+    private static UiStack ListRows(
+        UiState<BatteryWidgetModel> state,
+        string key,
+        double width
+    ) =>
+        new()
+        {
+            Key = key,
             Direction = UiComponentDirections.Vertical,
             Justify = state.Value.Options.ListAlign switch
             {
@@ -432,7 +499,6 @@ internal static class BatteryWidgetView
                 BatteryListAlignment.Bottom => UiComponentJustify.End,
                 _ => UiComponentJustify.Start,
             },
-            Fill = true,
             Gap = 0.045,
             Children =
             [
@@ -441,15 +507,22 @@ internal static class BatteryWidgetView
                     Key = "rows",
                     Items = UiValue.From(() => state.Value.Rows),
                     KeySelector = row => row.Id,
-                    Template = (row, key) => ListRow(row, key, state.Value.Options),
+                    Template = (row, rowKey) =>
+                        ListRow(row, rowKey, state.Value.Options, width),
                 },
             ],
         };
 
-    private static UiStack ListRow(BatteryWidgetRow row, string key, BatteryWidgetOptions options)
+    private static UiStack ListRow(
+        BatteryWidgetRow row,
+        string key,
+        BatteryWidgetOptions options,
+        double width
+    )
     {
         var color = row.Color(options.LowThreshold, options.Colors);
         var caption = Caption(row, options);
+        var inlineCaption = CaptionFitsInline(row, options, width);
 
         var nameGroup = new List<UiElement> { NameText(row.Name) };
         if (caption is { } captionText)
@@ -459,7 +532,7 @@ internal static class BatteryWidgetView
                 {
                     Key = "state",
                     Text = captionText,
-                    Size = UiSize.FromBasis(0.058, 0.34),
+                    Size = UiSize.FromBasis(CaptionSize, 0.34),
                     MinSize = 0.04,
                     Role = UiComponentTextRoles.Muted,
                     MaxLines = 1,
@@ -470,20 +543,22 @@ internal static class BatteryWidgetView
 
         var line = new List<UiElement>
         {
-            Glyph("glyph", DeviceGlyphs.For(row.Kind), color, () => 1, 0.1),
+            Glyph("glyph", DeviceGlyphs.For(row.Kind), color, () => 1, ListGlyph),
             new UiStack
             {
                 Key = "namegroup",
-                Direction = UiComponentDirections.Horizontal,
-                Align = UiComponentAlignments.Baseline,
+                Direction = inlineCaption
+                    ? UiComponentDirections.Horizontal
+                    : UiComponentDirections.Vertical,
+                Align = inlineCaption ? UiComponentAlignments.Baseline : UiComponentAlignments.Start,
                 Fill = true,
-                Gap = 0.02,
+                Gap = inlineCaption ? 0.02 : 0.004,
                 Children = nameGroup,
             },
         };
         if (options.ShowCharging && row.Charging)
         {
-            line.Add(Glyph("bolt", DeviceGlyphs.Bolt, color, () => 1, 0.075));
+            line.Add(Glyph("bolt", DeviceGlyphs.Bolt, color, () => 1, ListBolt));
         }
 
         if (options.ShowPercent)
@@ -493,8 +568,8 @@ internal static class BatteryWidgetView
                 {
                     Key = "pct",
                     Text = row.PercentText(),
-                    MainSize = 0.25,
-                    Size = UiSize.FromBasis(0.1, 0.62),
+                    MainSize = PercentWidth(row),
+                    Size = UiSize.FromBasis(PercentSize, 0.62),
                     MinSize = 0.055,
                     Digits = 4,
                     Weight = UiComponentTextWeights.SemiBold,
@@ -509,7 +584,7 @@ internal static class BatteryWidgetView
             Key = "line",
             Direction = UiComponentDirections.Horizontal,
             Align = UiComponentAlignments.Center,
-            Gap = 0.03,
+            Gap = ListGap,
             Children = line,
         };
 
@@ -544,7 +619,7 @@ internal static class BatteryWidgetView
         {
             Key = "name",
             Text = name,
-            Size = UiSize.FromBasis(0.082, 0.44),
+            Size = UiSize.FromBasis(NameSize, 0.44),
             MinSize = 0.048,
             Weight = UiComponentTextWeights.Medium,
             Role = UiComponentTextRoles.Secondary,
@@ -748,6 +823,12 @@ internal static class BatteryWidgetView
             return Strings.Widgets.Caption.Full();
         }
 
-        return options.ShowTrend && !string.IsNullOrEmpty(row.Trend) ? row.Trend! : null;
+        // `? row.Trend : null` would turn a null string into a non-null caption.
+        if (options.ShowTrend && !string.IsNullOrEmpty(row.Trend))
+        {
+            return row.Trend;
+        }
+
+        return null;
     }
 }

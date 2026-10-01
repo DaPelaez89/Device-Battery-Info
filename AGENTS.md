@@ -148,7 +148,21 @@ Design knowledge that is not obvious from the code alone:
   a real `UiView` to catch that. The list layout sizes the way the host's own Weather widget does:
   small type, `UiSize.FromBasis(fraction)` with a `maxOfCross` only as a safety rail; each row hugs
   its content and the `Fill` body centres the rows. Next to a `Fill` sibling a text's measured width
-  is underestimated, so the list percentage has a fixed `MainSize`. A progress bar's `StartColor`
+  is underestimated, so the list percentage has a fixed `MainSize`, sized to its own text so a
+  charging bolt sits beside the number. The plugin never sees pixels or fonts, so a layout that
+  depends on text width estimates it with `TextWidth`: four character classes (narrow, regular,
+  capital/digit, wide) fitted to SF Pro Semibold, the widest case of the host's system font, within a
+  few percent and erring wide; a localized text counts as its widest culture. Text is laid out on the
+  viewing device, so reading font files on the plugin's machine would not be more accurate.
+  The host's facts behind that, read from its renderer: the basis is `min(width, height)` of the
+  widget, a `UiResponsive` matches variants against the box its parent gives it (`MinAspect`, or
+  `MinWidth`/`MinHeight` in 120 px cells; min inclusive, max exclusive) and takes the **first** match,
+  so variants must not overlap (`Responsive_variants_never_overlap` checks every built tree), and a
+  text with `MinSize` shrinks toward it to fit its box
+  before it truncates. Texts in one row have no shrink priority, so a caption beside the name
+  truncates both when it does not fit: the list body is a `UiResponsive` over aspect buckets, and each
+  row puts its caption beside the name only where `CaptionFitsInline` says it fits at that bucket's
+  lowest aspect, under the name otherwise. A progress bar's `StartColor`
   and `EndColor` are always the same hex - the renderer always paints a `linear-gradient`.
 - **A widget press refreshes until the user binds flows.** Both widget types set `SupportsFlows`
   (Macro Deck PR 960), so the host runs the actions the user bound to the widget, like a built-in one.

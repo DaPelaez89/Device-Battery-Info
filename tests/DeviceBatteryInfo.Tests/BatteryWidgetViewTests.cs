@@ -323,6 +323,87 @@ public sealed class BatteryWidgetViewTests
         }
     }
 
+    // The host takes the first variant that matches, so an overlap hides the later one.
+    [TestCase(BatteryWidgetTypes.PanelId, BatteryWidgetOptions.LayoutRings)]
+    [TestCase(BatteryWidgetTypes.PanelId, BatteryWidgetOptions.LayoutList)]
+    [TestCase(BatteryWidgetTypes.TileId, BatteryWidgetOptions.LayoutRings)]
+    public void Responsive_variants_never_overlap(string widgetId, string layout)
+    {
+        var model = BatteryWidgetSamples.PanelList() with
+        {
+            Options = BatteryWidgetSamples.PanelList().Options with
+            {
+                Layout = BatteryWidgetOptions.ParseLayout(layout),
+            },
+        };
+        var tree = new UiView(
+            WidgetSurface(),
+            BatteryWidgetView.Build(widgetId, new UiState<BatteryWidgetModel>(model), 16)
+        ).Tree;
+        var json = JsonSerializer.SerializeToElement(tree.Root);
+
+        foreach (var responsive in Descendants(json).Where(n => n.GetProperty("Type").GetString() == "ui.responsive"))
+        {
+            var ranges = responsive
+                .GetProperty("Properties")
+                .GetProperty("variants")
+                .EnumerateArray()
+                .Select(v =>
+                    (
+                        Min: v.TryGetProperty("minAspect", out var min) ? min.GetDouble() : double.NegativeInfinity,
+                        Max: v.TryGetProperty("maxAspect", out var max) ? max.GetDouble() : double.PositiveInfinity
+                    )
+                )
+                .OrderBy(r => r.Min)
+                .ToArray();
+
+            for (var i = 1; i < ranges.Length; i++)
+            {
+                Assert.That(ranges[i].Min, Is.GreaterThanOrEqualTo(ranges[i - 1].Max), responsive.GetProperty("Id").GetString());
+            }
+        }
+    }
+
+    private static IEnumerable<JsonElement> Descendants(JsonElement node) =>
+        node.TryGetProperty("Children", out var children) && children.ValueKind == JsonValueKind.Array
+            ? children.EnumerateArray().SelectMany(Descendants).Prepend(node)
+            : [node];
+
+    [TestCase(1.0, false)]
+    [TestCase(1.3, true)]
+    [TestCase(2.0, true)]
+    public void A_caption_goes_beside_the_name_once_it_fits(double aspect, bool inline)
+    {
+        var mouse = new BatteryWidgetRow(
+            "mouse",
+            "Mouse",
+            82,
+            BatteryStatus.Charging,
+            Charging: true,
+            Stale: false,
+            TimeToFull: "0:35",
+            Kind: BatterySourceKind.Mouse
+        );
+        var options = BatteryWidgetOptions.Default with { Layout = BatteryWidgetLayout.List };
+
+        Assert.That(
+            BatteryWidgetView.CaptionFitsInline(
+                mouse,
+                options,
+                BatteryWidgetView.ListWidth(aspect, hasTitle: false)
+            ),
+            Is.EqualTo(inline)
+        );
+    }
+
+    [Test]
+    public void Text_width_resolves_a_localized_caption()
+    {
+        var eta = TextWidth.Of(Strings.Widgets.Caption.ChargingEta("0:35"), 1);
+
+        Assert.That(eta, Is.EqualTo(TextWidth.Of("0:35 to full", 1)).Within(1e-9));
+    }
+
     [Test]
     public void Labels_under_the_rings_shrink_them()
     {
