@@ -48,6 +48,20 @@ public sealed class BatteryWidgetViewTests
         Assert.That(view.Tree.Root, Is.Not.Null);
     }
 
+    [TestCase(BatteryWidgetTypes.PanelId)]
+    [TestCase(BatteryWidgetTypes.TileId)]
+    public void Without_a_press_handler_the_tree_declares_no_events_so_presses_run_the_flows(
+        string widgetId
+    )
+    {
+        var state = new UiState<BatteryWidgetModel>(
+            new BatteryWidgetModel([Row(72)], BatteryWidgetOptions.Default)
+        );
+        var view = new UiView(WidgetSurface(), BatteryWidgetView.Build(widgetId, state, 16));
+
+        Assert.That(JsonSerializer.Serialize(view.Tree), Does.Not.Contain("\"events\""));
+    }
+
     [TestCase(BatteryWidgetTypes.PanelId, "battery-panel")]
     [TestCase(BatteryWidgetTypes.TileId, "battery-tile")]
     public void Pressing_the_widget_runs_the_press_callback(string widgetId, string rootId)
@@ -65,20 +79,6 @@ public sealed class BatteryWidgetViewTests
 
         Assert.That(result.IsAccepted, Is.True);
         Assert.That(presses, Is.EqualTo(1));
-    }
-
-    [TestCase(BatteryWidgetTypes.PanelId)]
-    [TestCase(BatteryWidgetTypes.TileId)]
-    public void Without_a_press_handler_the_tree_declares_no_events_so_presses_run_the_flows(
-        string widgetId
-    )
-    {
-        var state = new UiState<BatteryWidgetModel>(
-            new BatteryWidgetModel([Row(72)], BatteryWidgetOptions.Default)
-        );
-        var view = new UiView(WidgetSurface(), BatteryWidgetView.Build(widgetId, state, 16));
-
-        Assert.That(JsonSerializer.Serialize(view.Tree), Does.Not.Contain("\"events\""));
     }
 
     [TestCase("""{}""", ExpectedResult = false)]
@@ -151,8 +151,9 @@ public sealed class BatteryWidgetViewTests
         );
     }
 
-    [Test]
-    public void Config_view_builds()
+    [TestCase(BatteryWidgetTypes.PanelId)]
+    [TestCase(BatteryWidgetTypes.TileId)]
+    public void Config_view_builds(string widgetId)
     {
         var devices = new[]
         {
@@ -168,9 +169,53 @@ public sealed class BatteryWidgetViewTests
                         SessionMode = UiSessionModes.Exclusive,
                         Attributes = new Dictionary<string, JsonElement>(),
                     },
-                    BatteryWidgetConfigView.Build(BatteryWidgetOptions.Default, devices)
+                    BatteryWidgetConfigView.Build(widgetId, BatteryWidgetOptions.Default, devices)
                 ).Tree
         );
+    }
+
+    // The host resolves a condition by the bare field id, so wrapping tabs and rows must not prefix it.
+    [TestCase(BatteryWidgetTypes.PanelId)]
+    [TestCase(BatteryWidgetTypes.TileId)]
+    public void Every_visibility_condition_names_a_field_the_renderer_can_find(string widgetId)
+    {
+        var view = new UiView(
+            new UiSurface
+            {
+                Kind = UiSurfaceKinds.Config,
+                SessionMode = UiSessionModes.Exclusive,
+                Attributes = new Dictionary<string, JsonElement>(),
+            },
+            BatteryWidgetConfigView.Build(widgetId, BatteryWidgetOptions.Default, [])
+        );
+        var root = System.Text.Json.Nodes.JsonNode.Parse(
+            MacroDeck.Ui.Model.Serialization.UiCanonicalJson.Serialize(view.Tree.Root)
+        )!;
+
+        var ids = new HashSet<string>();
+        var conditions = new List<string>();
+        void Walk(System.Text.Json.Nodes.JsonNode node)
+        {
+            ids.Add(node["id"]!.GetValue<string>());
+            if (node["properties"]?["visibleWhen"]?["parameterName"] is { } name)
+            {
+                conditions.Add(name.GetValue<string>());
+            }
+
+            foreach (var child in node["children"]?.AsArray() ?? [])
+            {
+                Walk(child!);
+            }
+        }
+
+        Walk(root);
+
+        Assert.That(ids, Does.Contain("sourceIds").And.Contain("colors").And.Contain("flows"));
+        Assert.That(conditions, Is.All.Matches<string>(ids.Contains));
+        if (widgetId == BatteryWidgetTypes.PanelId)
+        {
+            Assert.That(conditions, Is.Not.Empty);
+        }
     }
 
     [Test]
@@ -189,7 +234,7 @@ public sealed class BatteryWidgetViewTests
                 r.Declaration.Id.Contains(nameof(BatteryWidgetPreviews), StringComparison.Ordinal)
             )
             .ToArray();
-        Assert.That(ours, Has.Length.EqualTo(7));
+        Assert.That(ours, Has.Length.EqualTo(8));
         using (Assert.EnterMultipleScope())
         {
             Assert.That(
@@ -226,6 +271,190 @@ public sealed class BatteryWidgetViewTests
             Assert.DoesNotThrow(() => JsonDocument.Parse(descriptor.DataSchema!));
             Assert.DoesNotThrow(() => JsonDocument.Parse(descriptor.DefaultData!));
         }
+    }
+
+    [TestCase(BatteryWidgetTypes.PanelId, BatteryWidgetOptions.LayoutRings)]
+    [TestCase(BatteryWidgetTypes.PanelId, BatteryWidgetOptions.LayoutList)]
+    [TestCase(BatteryWidgetTypes.TileId, BatteryWidgetOptions.LayoutRings)]
+    public void Every_layout_builds_with_charging_stale_and_unknown_rows(
+        string widgetId,
+        string layout
+    )
+    {
+        var rows = new BatteryWidgetRow[]
+        {
+            new("a", "A", 40, BatteryStatus.Charging, true, false, "0:20", Kind: BatterySourceKind.Earbuds),
+            new("b", "B", 70, BatteryStatus.Discharging, false, true, null, Kind: BatterySourceKind.Pen),
+            new("c", "C", null, BatteryStatus.Unknown, false, false, null),
+        };
+        var options = BatteryWidgetOptions.Default with
+        {
+            Layout = BatteryWidgetOptions.ParseLayout(layout),
+            ShowNames = true,
+        };
+        var state = new UiState<BatteryWidgetModel>(new BatteryWidgetModel(rows, options));
+
+        Assert.DoesNotThrow(
+            () => _ = new UiView(WidgetSurface(), BatteryWidgetView.Build(widgetId, state, 16)).Tree
+        );
+    }
+
+    [TestCase(1, 1.0, 1, 1)]
+    [TestCase(2, 1.0, 2, 1)]
+    [TestCase(4, 1.0, 2, 2)]
+    [TestCase(4, 4.4, 4, 1)]
+    [TestCase(3, 0.5, 1, 3)]
+    [TestCase(6, 1.5, 3, 2)]
+    public void Rings_are_arranged_to_be_as_large_as_the_box_allows(
+        int count,
+        double aspect,
+        int columns,
+        int rows
+    )
+    {
+        var arrangement = BatteryWidgetView.Arrange(count, aspect, hasTitle: false, showNames: false);
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(arrangement.Columns, Is.EqualTo(columns));
+            Assert.That(arrangement.Rows, Is.EqualTo(rows));
+            Assert.That(arrangement.Diameter, Is.GreaterThan(0).And.LessThanOrEqualTo(1));
+        }
+    }
+
+    [Test]
+    public void Every_device_glyph_is_a_path_the_renderer_accepts()
+    {
+        var paths = Enum.GetValues<BatterySourceKind>()
+            .Select(DeviceGlyphs.For)
+            .Append(DeviceGlyphs.Bolt);
+
+        foreach (var path in paths)
+        {
+            Assert.That(IsShapePathData(path), Is.True, path);
+        }
+    }
+
+    // Mirrors the renderer's isShapePathData.
+    private static bool IsShapePathData(string value)
+    {
+        var arity = new Dictionary<char, int>
+        {
+            ['M'] = 2,
+            ['L'] = 2,
+            ['H'] = 1,
+            ['V'] = 1,
+            ['C'] = 6,
+            ['Q'] = 4,
+            ['A'] = 7,
+            ['Z'] = 0,
+        };
+        var tokens = System.Text.RegularExpressions.Regex.Matches(
+            value,
+            @"[A-Za-z]|[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?"
+        );
+        if (tokens.Count == 0 || tokens[0].Value != "M")
+        {
+            return false;
+        }
+
+        var index = 0;
+        while (index < tokens.Count)
+        {
+            if (tokens[index].Value.Length != 1 || !arity.TryGetValue(tokens[index].Value[0], out var count))
+            {
+                return false;
+            }
+
+            var numbers = 0;
+            index++;
+            while (index < tokens.Count && !char.IsLetter(tokens[index].Value[0]))
+            {
+                numbers++;
+                index++;
+            }
+
+            if (count == 0 ? numbers != 0 : numbers == 0 || numbers % count != 0)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    [Test]
+    public void Every_scheme_shows_a_low_level_in_red_and_a_stale_one_in_grey()
+    {
+        foreach (var scheme in Enum.GetValues<BatteryColorScheme>())
+        {
+            using (Assert.EnterMultipleScope())
+            {
+                Assert.That(R("a", 15, charging: true).Color(20, scheme), Is.EqualTo(BatteryWidgetRow.Red));
+                Assert.That(R("a", 20).Color(20, scheme), Is.EqualTo(BatteryWidgetRow.Red));
+                Assert.That(R("a", 60, stale: true).Color(20, scheme), Is.EqualTo(BatteryWidgetRow.Grey));
+                Assert.That(R("a", null).Color(20, scheme), Is.EqualTo(BatteryWidgetRow.Grey));
+                Assert.That(R("a", 80).Color(20, scheme), Does.Match("^#[0-9A-F]{6}$"));
+            }
+        }
+    }
+
+    [Test]
+    public void The_default_scheme_steps_with_the_level_and_is_cyan_while_charging()
+    {
+        Assert.That(BatteryWidgetOptions.Default.Colors, Is.EqualTo(BatteryColorScheme.LevelsCharging));
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(R("a", 60, charging: true).Color(20), Is.EqualTo(BatteryWidgetRow.Cyan));
+            Assert.That(R("a", 35).Color(20), Is.EqualTo(BatteryWidgetRow.Orange));
+            Assert.That(R("a", 55).Color(20), Is.EqualTo(BatteryWidgetRow.Yellow));
+            Assert.That(R("a", 61).Color(20), Is.EqualTo(BatteryWidgetRow.Green));
+        }
+    }
+
+    [Test]
+    public void List_alignment_round_trips_through_the_string_form_and_defaults_to_top()
+    {
+        foreach (var align in Enum.GetValues<BatteryListAlignment>())
+        {
+            Assert.That(
+                BatteryWidgetOptions.ParseListAlign(BatteryWidgetOptions.ListAlignValue(align)),
+                Is.EqualTo(align)
+            );
+        }
+
+        Assert.That(BatteryWidgetOptions.ParseListAlign(null), Is.EqualTo(BatteryListAlignment.Top));
+    }
+
+    [Test]
+    public void Colors_round_trip_through_the_string_form_and_default_to_levels_with_charging()
+    {
+        foreach (var scheme in Enum.GetValues<BatteryColorScheme>())
+        {
+            Assert.That(
+                BatteryWidgetOptions.ParseColors(BatteryWidgetOptions.ColorsValue(scheme)),
+                Is.EqualTo(scheme)
+            );
+        }
+
+        Assert.That(
+            BatteryWidgetOptions.ParseColors("unknown"),
+            Is.EqualTo(BatteryColorScheme.LevelsCharging)
+        );
+    }
+
+    [Test]
+    public void Layout_round_trips_through_the_string_form_and_defaults_to_rings()
+    {
+        foreach (var layout in Enum.GetValues<BatteryWidgetLayout>())
+        {
+            Assert.That(
+                BatteryWidgetOptions.ParseLayout(BatteryWidgetOptions.LayoutValue(layout)),
+                Is.EqualTo(layout)
+            );
+        }
+
+        Assert.That(BatteryWidgetOptions.ParseLayout("unknown"), Is.EqualTo(BatteryWidgetLayout.Rings));
     }
 
     private static BatteryWidgetRow R(

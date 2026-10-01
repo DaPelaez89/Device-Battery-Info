@@ -148,7 +148,7 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
         }
 
         var widgetType = Attribute(surface, UiConfigSurfaceAttributes.WidgetType) ?? string.Empty;
-        if (LocalWidgetId(widgetType) is null)
+        if (LocalWidgetId(widgetType) is not { } localId)
         {
             return null;
         }
@@ -157,7 +157,12 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
         var options = ParseOptions(data);
         var view = new UiView(
             surface,
-            BatteryWidgetConfigView.Build(options, CurrentSlots(), BatteryWidgetTypes.StoredFlows(data))
+            BatteryWidgetConfigView.Build(
+                localId,
+                options,
+                CurrentSlots(),
+                BatteryWidgetTypes.StoredFlows(data)
+            )
         );
         return new UiViewSession(view);
     }
@@ -178,7 +183,8 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
                         reading.IsCharging,
                         snapshot.IsStale,
                         FormatTimeToFull(reading.TimeToFull),
-                        BatteryTrendFormatter.FormatText(_trend.GetTrend(snapshot))
+                        BatteryTrendFormatter.FormatText(_trend.GetTrend(snapshot)),
+                        slot.Kind
                     );
                 }
 
@@ -189,7 +195,8 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
                     BatteryStatus.Unknown,
                     false,
                     true,
-                    null
+                    null,
+                    Kind: slot.Kind
                 );
             })
             .ToArray();
@@ -269,6 +276,24 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
                 ? titleValue.GetString() ?? string.Empty
                 : string.Empty;
 
+        var layout =
+            obj.TryGetProperty("layout", out var layoutValue)
+            && layoutValue.ValueKind == JsonValueKind.String
+                ? BatteryWidgetOptions.ParseLayout(layoutValue.GetString())
+                : BatteryWidgetLayout.Rings;
+
+        var colors =
+            obj.TryGetProperty("colors", out var colorsValue)
+            && colorsValue.ValueKind == JsonValueKind.String
+                ? BatteryWidgetOptions.ParseColors(colorsValue.GetString())
+                : BatteryWidgetOptions.Default.Colors;
+
+        var listAlign =
+            obj.TryGetProperty("listAlign", out var listAlignValue)
+            && listAlignValue.ValueKind == JsonValueKind.String
+                ? BatteryWidgetOptions.ParseListAlign(listAlignValue.GetString())
+                : BatteryWidgetOptions.Default.ListAlign;
+
         return new BatteryWidgetOptions(
             sourceIds,
             Flag("showBar", true),
@@ -278,7 +303,11 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
             Flag("showTrend", true),
             low,
             sort,
-            title
+            title,
+            layout,
+            Flag("showNames", false),
+            colors,
+            listAlign
         );
     }
 

@@ -12,18 +12,21 @@ internal static class BatteryWidgetPreviews
     public static UiElement Panel() => PanelOf(BatteryWidgetSamples.Panel());
 
     [UiPreview(
+        "Panel - names and heading",
+        View = nameof(BatteryWidgetView),
+        Profile = UiPreviewProfiles.Widget
+    )]
+    public static UiElement PanelNamed() => PanelOf(BatteryWidgetSamples.PanelNamed());
+
+    [UiPreview("Panel - list", View = nameof(BatteryWidgetView), Profile = UiPreviewProfiles.Widget)]
+    public static UiElement PanelList() => PanelOf(BatteryWidgetSamples.PanelList());
+
+    [UiPreview(
         "Panel - low battery",
         View = nameof(BatteryWidgetView),
         Profile = UiPreviewProfiles.Widget
     )]
     public static UiElement PanelLow() => PanelOf(BatteryWidgetSamples.PanelLow());
-
-    [UiPreview(
-        "Panel - charging",
-        View = nameof(BatteryWidgetView),
-        Profile = UiPreviewProfiles.Widget
-    )]
-    public static UiElement PanelCharging() => PanelOf(BatteryWidgetSamples.PanelCharging());
 
     [UiPreview(
         "Panel - nothing configured",

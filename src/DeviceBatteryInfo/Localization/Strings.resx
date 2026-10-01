@@ -122,6 +122,15 @@
     <data name="Widgets.Caption.NoSignal" xml:space="preserve">
         <value>no signal</value>
     </data>
+    <data name="Widgets.Config.Tabs.Devices" xml:space="preserve">
+        <value>Devices</value>
+    </data>
+    <data name="Widgets.Config.Tabs.Appearance" xml:space="preserve">
+        <value>Appearance</value>
+    </data>
+    <data name="Widgets.Config.Show.Heading" xml:space="preserve">
+        <value>Show</value>
+    </data>
     <data name="Widgets.Config.Devices.Label" xml:space="preserve">
         <value>Devices</value>
     </data>
@@ -129,10 +138,10 @@
         <value>Heading</value>
     </data>
     <data name="Widgets.Config.Title.Description" xml:space="preserve">
-        <value>Shown above the rows. Leave empty for no heading.</value>
+        <value>Shown above the devices. Leave empty for no heading.</value>
     </data>
     <data name="Widgets.Config.Sort.Label" xml:space="preserve">
-        <value>Row order</value>
+        <value>Order</value>
     </data>
     <data name="Widgets.Config.Sort.Manual" xml:space="preserve">
         <value>As listed above</value>
@@ -147,22 +156,64 @@
         <value>Charging first</value>
     </data>
     <data name="Widgets.Config.ShowBar.Label" xml:space="preserve">
-        <value>Show level bar</value>
+        <value>Level ring or bar</value>
+    </data>
+    <data name="Widgets.Config.Layout.Label" xml:space="preserve">
+        <value>Layout</value>
+    </data>
+    <data name="Widgets.Config.Layout.Rings" xml:space="preserve">
+        <value>Rings</value>
+    </data>
+    <data name="Widgets.Config.Layout.List" xml:space="preserve">
+        <value>List</value>
+    </data>
+    <data name="Widgets.Config.Colors.Label" xml:space="preserve">
+        <value>Colors</value>
+    </data>
+    <data name="Widgets.Config.Colors.LevelsCharging" xml:space="preserve">
+        <value>Level, cyan when charging</value>
+    </data>
+    <data name="Widgets.Config.Colors.Levels" xml:space="preserve">
+        <value>Level</value>
+    </data>
+    <data name="Widgets.Config.Colors.Simple" xml:space="preserve">
+        <value>Green and red</value>
+    </data>
+    <data name="Widgets.Config.Colors.Device" xml:space="preserve">
+        <value>Device type</value>
+    </data>
+    <data name="Widgets.Config.Colors.Gradient" xml:space="preserve">
+        <value>Gradient</value>
+    </data>
+    <data name="Widgets.Config.ListAlign.Label" xml:space="preserve">
+        <value>Row alignment</value>
+    </data>
+    <data name="Widgets.Config.ListAlign.Top" xml:space="preserve">
+        <value>Top</value>
+    </data>
+    <data name="Widgets.Config.ListAlign.Center" xml:space="preserve">
+        <value>Center</value>
+    </data>
+    <data name="Widgets.Config.ListAlign.Bottom" xml:space="preserve">
+        <value>Bottom</value>
+    </data>
+    <data name="Widgets.Config.ShowNames.Label" xml:space="preserve">
+        <value>Device names</value>
     </data>
     <data name="Widgets.Config.ShowPercent.Label" xml:space="preserve">
-        <value>Show percentage</value>
+        <value>Percentage</value>
     </data>
     <data name="Widgets.Config.ShowCharging.Label" xml:space="preserve">
-        <value>Show charging indicator</value>
+        <value>Charging indicator</value>
     </data>
     <data name="Widgets.Config.ShowTimeToFull.Label" xml:space="preserve">
-        <value>Show time to full</value>
+        <value>Time to full</value>
     </data>
     <data name="Widgets.Config.ShowTrend.Label" xml:space="preserve">
-        <value>Show battery trend</value>
+        <value>Battery trend</value>
     </data>
     <data name="Widgets.Config.LowThreshold.Label" xml:space="preserve">
-        <value>Low battery threshold (%)</value>
+        <value>Low battery at (%)</value>
     </data>
 
     <data name="ConfigFlow.Device.Title" xml:space="preserve">

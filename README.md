@@ -18,12 +18,18 @@ peripherals, right on your deck.
 ## Features
 
 **Two deck widgets**, each with a config form to choose which devices it shows and what it displays
-(level bar, percentage, charging indicator, time to full, battery trend, low-battery threshold):
+(level ring or bar, percentage, charging indicator, time to full, battery trend, low-battery threshold).
+Each device is drawn with an icon for its kind and a coloured ring, with a bolt in the ring's gap while it
+charges. The colour scheme is a widget setting: by level with cyan while charging (the default), by
+level only, green only, by device type, or a smooth gradient. In every scheme a level at or below the
+low-battery threshold is red, even while charging:
 
-- **Battery panel** shows several devices at once.
-- **Battery tile** shows a single device. Pressing a widget refreshes the levels until you assign
-  actions to it; from then on it runs your actions like any other widget (add the "Refresh battery
-  levels" action to keep refreshing).
+- **Battery panel** shows several devices at once, as a grid of rings that arranges itself to the
+  widget's size (optionally with names), or as a list of rows with bars aligned to the top, centre or
+  bottom.
+- **Battery tile** shows a single device as one large ring, with name, level and state beside it on a
+  wide tile. Pressing a widget refreshes the levels until you assign actions to it; from then on it
+  runs your actions like any other widget (add the "Refresh battery levels" action to keep refreshing).
 
 Widgets update live between polls. The battery trend is shown as a signed change over the window it
 covers, for example `-13%/1h` while discharging or `+28%/30m` while charging. It needs a couple of

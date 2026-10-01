@@ -1,5 +1,6 @@
 using System.Text.Json;
 using DeviceBatteryInfo.Core;
+using MacroDeck.Ui.Components;
 using MacroDeck.Ui.Config;
 using MacroDeck.Ui.Config.Options;
 using MacroDeck.Ui.Dsl;
@@ -10,12 +11,16 @@ namespace DeviceBatteryInfo.Ui;
 internal static class BatteryWidgetConfigView
 {
     public static UiElement Build(
+        string widgetLocalId,
         BatteryWidgetOptions current,
         IReadOnlyList<BatterySlot> devices,
         JsonElement flows = default
     )
     {
+        var isPanel = widgetLocalId != BatteryWidgetTypes.TileId;
         var sourceIds = new UiState<IReadOnlyList<string>>(current.SourceIds);
+        var layout = new UiState<string>(BatteryWidgetOptions.LayoutValue(current.Layout));
+        var showNames = new UiState<bool>(current.ShowNames);
         var showBar = new UiState<bool>(current.ShowBar);
         var showPercent = new UiState<bool>(current.ShowPercent);
         var showCharging = new UiState<bool>(current.ShowCharging);
@@ -24,34 +29,185 @@ internal static class BatteryWidgetConfigView
         var lowThreshold = new UiState<double>(current.LowThreshold);
         var sort = new UiState<string>(BatteryWidgetOptions.SortValue(current.Sort));
         var title = new UiState<string>(current.Title);
+        var colors = new UiState<string>(BatteryWidgetOptions.ColorsValue(current.Colors));
+        var listAlign = new UiState<string>(
+            BatteryWidgetOptions.ListAlignValue(current.ListAlign)
+        );
         // A default JsonElement cannot be serialized into the tree.
         var flowList = new UiState<JsonElement>(
             flows.ValueKind == JsonValueKind.Array ? flows : EmptyFlows
         );
 
-        var options = devices
-            .Select(d => UiOption.Of(d.Id) with { Label = d.DisplayName })
-            .ToArray();
+        // The rings layout has no room for a caption.
+        UiValue<UiVisibleWhen> OnlyFor(string layoutValue) =>
+            isPanel
+                ? UiValue.Of(
+                    new UiVisibleWhen
+                    {
+                        ParameterName = "layout",
+                        Values = [layoutValue],
+                        SiblingValue = () => layout.Value,
+                    }
+                )
+                : UiValue.None<UiVisibleWhen>();
 
-        var sortOptions = new[]
+        var content = new List<UiElement>();
+        if (isPanel)
         {
-            UiOption.Of(BatteryWidgetOptions.SortManual) with
+            content.Add(
+                new UiStringInput
+                {
+                    Key = "title",
+                    Label = Strings.Widgets.Config.Title.Label(),
+                    Description = Strings.Widgets.Config.Title.Description(),
+                    Binding = Bind.To(title),
+                }
+            );
+        }
+
+        content.Add(
+            new UiMultiSelectInput
             {
-                Label = Strings.Widgets.Config.Sort.Manual(),
-            },
-            UiOption.Of(BatteryWidgetOptions.SortLowestFirst) with
+                Key = "sourceIds",
+                Label = Strings.Widgets.Config.Devices.Label(),
+                Options = UiValue.Of<IReadOnlyList<UiOption>>(
+                    devices.Select(d => UiOption.Of(d.Id) with { Label = d.DisplayName }).ToArray()
+                ),
+                Binding = Bind.To(sourceIds),
+                Reorderable = UiValue.Of(true),
+            }
+        );
+        content.Add(
+            new UiChoiceInput
             {
-                Label = Strings.Widgets.Config.Sort.LowestFirst(),
-            },
-            UiOption.Of(BatteryWidgetOptions.SortChargingFirst) with
+                Key = "sort",
+                Label = Strings.Widgets.Config.Sort.Label(),
+                Options = Options(
+                    (BatteryWidgetOptions.SortManual, Strings.Widgets.Config.Sort.Manual()),
+                    (BatteryWidgetOptions.SortLowestFirst, Strings.Widgets.Config.Sort.LowestFirst()),
+                    (BatteryWidgetOptions.SortChargingFirst, Strings.Widgets.Config.Sort.ChargingFirst()),
+                    (BatteryWidgetOptions.SortAlphabetical, Strings.Widgets.Config.Sort.Alphabetical())
+                ),
+                Binding = Bind.To(sort),
+            }
+        );
+
+        var appearance = new List<UiElement>();
+        if (isPanel)
+        {
+            appearance.Add(
+                Row(
+                    "layout-row",
+                    new UiChoiceInput
+                    {
+                        Key = "layout",
+                        Label = Strings.Widgets.Config.Layout.Label(),
+                        Segmented = true,
+                        Options = UiValue.Of<IReadOnlyList<UiOption>>(
+                            [
+                                IconOption(
+                                    BatteryWidgetOptions.LayoutRings,
+                                    Strings.Widgets.Config.Layout.Rings(),
+                                    UiIcons.Disc
+                                ),
+                                IconOption(
+                                    BatteryWidgetOptions.LayoutList,
+                                    Strings.Widgets.Config.Layout.List(),
+                                    UiIcons.AlignLeft
+                                ),
+                            ]
+                        ),
+                        Binding = Bind.To(layout),
+                        RowWeight = 1,
+                    },
+                    new UiChoiceInput
+                    {
+                        Key = "listAlign",
+                        Label = Strings.Widgets.Config.ListAlign.Label(),
+                        Segmented = true,
+                        Options = UiValue.Of<IReadOnlyList<UiOption>>(
+                            [
+                                IconOption(
+                                    BatteryWidgetOptions.ListAlignTop,
+                                    Strings.Widgets.Config.ListAlign.Top(),
+                                    UiIcons.AlignTop
+                                ),
+                                IconOption(
+                                    BatteryWidgetOptions.ListAlignCenter,
+                                    Strings.Widgets.Config.ListAlign.Center(),
+                                    UiIcons.AlignMiddle
+                                ),
+                                IconOption(
+                                    BatteryWidgetOptions.ListAlignBottom,
+                                    Strings.Widgets.Config.ListAlign.Bottom(),
+                                    UiIcons.AlignBottom
+                                ),
+                            ]
+                        ),
+                        Binding = Bind.To(listAlign),
+                        VisibleWhen = OnlyFor(BatteryWidgetOptions.LayoutList),
+                        RowWeight = 1,
+                    }
+                )
+            );
+            appearance.Add(
+                Toggle(
+                    "showNames",
+                    Strings.Widgets.Config.ShowNames.Label(),
+                    showNames,
+                    OnlyFor(BatteryWidgetOptions.LayoutRings)
+                )
+            );
+        }
+
+        appearance.Add(
+            new UiChoiceInput
             {
-                Label = Strings.Widgets.Config.Sort.ChargingFirst(),
-            },
-            UiOption.Of(BatteryWidgetOptions.SortAlphabetical) with
+                Key = "colors",
+                Label = Strings.Widgets.Config.Colors.Label(),
+                Options = Options(
+                    (BatteryWidgetOptions.ColorsLevelsCharging, Strings.Widgets.Config.Colors.LevelsCharging()),
+                    (BatteryWidgetOptions.ColorsLevels, Strings.Widgets.Config.Colors.Levels()),
+                    (BatteryWidgetOptions.ColorsSimple, Strings.Widgets.Config.Colors.Simple()),
+                    (BatteryWidgetOptions.ColorsDevice, Strings.Widgets.Config.Colors.Device()),
+                    (BatteryWidgetOptions.ColorsGradient, Strings.Widgets.Config.Colors.Gradient())
+                ),
+                Binding = Bind.To(colors),
+            }
+        );
+        appearance.Add(
+            new UiNumberInput
             {
-                Label = Strings.Widgets.Config.Sort.Alphabetical(),
-            },
-        };
+                Key = "lowThreshold",
+                Label = Strings.Widgets.Config.LowThreshold.Label(),
+                Min = 1,
+                Max = 99,
+                Step = 1,
+                ShowSlider = true,
+                Binding = Bind.To(lowThreshold),
+            }
+        );
+
+        appearance.AddRange(
+            [
+                new UiHeading { Key = "show-heading", Text = Strings.Widgets.Config.Show.Heading() },
+                Toggle("showBar", Strings.Widgets.Config.ShowBar.Label(), showBar),
+                Toggle("showPercent", Strings.Widgets.Config.ShowPercent.Label(), showPercent),
+                Toggle("showCharging", Strings.Widgets.Config.ShowCharging.Label(), showCharging),
+                Toggle(
+                    "showTimeToFull",
+                    Strings.Widgets.Config.ShowTimeToFull.Label(),
+                    showTimeToFull,
+                    OnlyFor(BatteryWidgetOptions.LayoutList)
+                ),
+                Toggle(
+                    "showTrend",
+                    Strings.Widgets.Config.ShowTrend.Label(),
+                    showTrend,
+                    OnlyFor(BatteryWidgetOptions.LayoutList)
+                ),
+            ]
+        );
 
         return new UiWidgetConfiguration
         {
@@ -61,66 +217,14 @@ internal static class BatteryWidgetConfigView
                 Key = "battery-widget-config-properties",
                 Children =
                 [
-                    new UiStringInput
+                    new UiTabs
                     {
-                        Key = "title",
-                        Label = Strings.Widgets.Config.Title.Label(),
-                        Description = Strings.Widgets.Config.Title.Description(),
-                        Binding = Bind.To(title),
-                    },
-                    new UiMultiSelectInput
-                    {
-                        Key = "sourceIds",
-                        Label = Strings.Widgets.Config.Devices.Label(),
-                        Options = UiValue.Of<IReadOnlyList<UiOption>>(options),
-                        Binding = Bind.To(sourceIds),
-                        Reorderable = UiValue.Of(true),
-                    },
-                    new UiChoiceInput
-                    {
-                        Key = "sort",
-                        Label = Strings.Widgets.Config.Sort.Label(),
-                        Options = UiValue.Of<IReadOnlyList<UiOption>>(sortOptions),
-                        Binding = Bind.To(sort),
-                    },
-                    new UiBooleanInput
-                    {
-                        Key = "showBar",
-                        Label = Strings.Widgets.Config.ShowBar.Label(),
-                        Binding = Bind.To(showBar),
-                    },
-                    new UiBooleanInput
-                    {
-                        Key = "showPercent",
-                        Label = Strings.Widgets.Config.ShowPercent.Label(),
-                        Binding = Bind.To(showPercent),
-                    },
-                    new UiBooleanInput
-                    {
-                        Key = "showCharging",
-                        Label = Strings.Widgets.Config.ShowCharging.Label(),
-                        Binding = Bind.To(showCharging),
-                    },
-                    new UiBooleanInput
-                    {
-                        Key = "showTimeToFull",
-                        Label = Strings.Widgets.Config.ShowTimeToFull.Label(),
-                        Binding = Bind.To(showTimeToFull),
-                    },
-                    new UiBooleanInput
-                    {
-                        Key = "showTrend",
-                        Label = Strings.Widgets.Config.ShowTrend.Label(),
-                        Binding = Bind.To(showTrend),
-                    },
-                    new UiNumberInput
-                    {
-                        Key = "lowThreshold",
-                        Label = Strings.Widgets.Config.LowThreshold.Label(),
-                        Min = 1,
-                        Max = 99,
-                        Step = 1,
-                        Binding = Bind.To(lowThreshold),
+                        Key = "sections",
+                        Children =
+                        [
+                            Tab("content-tab", Strings.Widgets.Config.Tabs.Devices(), content),
+                            Tab("appearance-tab", Strings.Widgets.Config.Tabs.Appearance(), appearance),
+                        ],
                     },
                 ],
             },
@@ -143,4 +247,48 @@ internal static class BatteryWidgetConfigView
     }
 
     private static readonly JsonElement EmptyFlows = JsonDocument.Parse("[]").RootElement.Clone();
+
+    private static UiTab Tab(string key, UiText label, IReadOnlyList<UiElement> children) =>
+        new()
+        {
+            Key = key,
+            Label = label,
+            Children = children,
+        };
+
+    private static UiConfigStack Row(string key, params UiElement[] children) =>
+        new()
+        {
+            Key = key,
+            Direction = UiComponentDirections.Horizontal,
+            Wrap = false,
+            Children = children,
+        };
+
+    private static UiBooleanInput Toggle(
+        string key,
+        UiText label,
+        UiState<bool> state,
+        UiValue<UiVisibleWhen> visibleWhen = default
+    ) =>
+        new()
+        {
+            Key = key,
+            Label = label,
+            Binding = Bind.To(state),
+            VisibleWhen = visibleWhen,
+        };
+
+    private static UiValue<IReadOnlyList<UiOption>> Options(
+        params (string Value, MacroDeck.Localization.LocalizedText Label)[] options
+    ) =>
+        UiValue.Of<IReadOnlyList<UiOption>>(
+            options.Select(o => UiOption.Of(o.Value) with { Label = o.Label }).ToArray()
+        );
+
+    private static UiOption IconOption(
+        string value,
+        MacroDeck.Localization.LocalizedText label,
+        string icon
+    ) => UiOption.Of(value) with { Label = label, Icon = icon };
 }

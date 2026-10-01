@@ -74,7 +74,7 @@ internal static class BatteryWidgetTypes
             );
 
     private const string DefaultData =
-        """{"sourceIds":[],"showBar":true,"showPercent":true,"showCharging":true,"showTimeToFull":true,"showTrend":true,"lowThreshold":20,"sort":"manual","title":""}""";
+        """{"sourceIds":[],"showBar":true,"showPercent":true,"showCharging":true,"showTimeToFull":true,"showTrend":true,"lowThreshold":20,"sort":"manual","title":"","layout":"rings","showNames":false,"colors":"levels-charging","listAlign":"top"}""";
 
     private const string Schema = """
         {
@@ -103,9 +103,32 @@ internal static class BatteryWidgetTypes
               "default": "manual",
               "description": "Row order. 'manual' keeps the order the devices are listed in above."
             },
+            "layout": {
+              "type": "string",
+              "enum": ["rings", "list"],
+              "default": "rings",
+              "description": "How the panel draws its devices: a grid of level rings, or a list of rows with bars."
+            },
+            "colors": {
+              "type": "string",
+              "enum": ["levels-charging", "levels", "simple", "device", "gradient"],
+              "default": "levels-charging",
+              "description": "Ring and bar colours. Every scheme shows a level at or below lowThreshold in red."
+            },
+            "listAlign": {
+              "type": "string",
+              "enum": ["top", "center", "bottom"],
+              "default": "top",
+              "description": "Where the list layout places its rows when they do not fill the widget."
+            },
             "flows": {
               "type": "array",
               "description": "The actions a press runs, edited in the widget's action list."
+            },
+            "showNames": {
+              "type": "boolean",
+              "default": false,
+              "description": "Show each device's name under its ring. The list layout and the tile always show names."
             },
             "title": {
               "type": "string",

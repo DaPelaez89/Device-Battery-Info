@@ -38,7 +38,8 @@ src/DeviceBatteryInfo/
   Core/IDeviceDiscovery.cs public: lists present Bluetooth devices and attached Android phones for the
                            config-flow pickers (HID
                            enumeration is kept for a future "scan for supported devices" step)
-  Ui/                      widget rendering: BatteryWidgetView (deck tree), BatteryWidgetConfigView
+  Ui/                      widget rendering: BatteryWidgetView (deck tree), DeviceGlyphs (one vector
+                           icon per BatterySourceKind, plus the charging bolt), BatteryWidgetConfigView
                            (config form), UiViewSession (UiView -> IUiSession adapter),
                            BatteryWidgetModel, BatteryWidgetTypes (descriptors + JSON Schema),
                            BatteryWidgetSamples (fixed demo models shared by the widget "sample"
@@ -112,21 +113,41 @@ Design knowledge that is not obvious from the code alone:
   which conformance does not catch, so the `BatteryWidgetViewTests` build each tree through a real
   `UiView`. A widget `config` surface is served by this plugin's own `IUiProvider.CreateSessionAsync`
   (kind `"config"`, `entryPoint == "widget-config"`), not by the hosting config-flow path.
+  `BatteryWidgetConfigView` follows the host's own Action Button form: `UiTabs` (Devices, and Appearance
+  with the display switches under a "Show" heading) and `Segmented` choices whose `UiOption.Icon` names a `UiIcons` value for short icon choices.
+  The properties pane beside the actions editor is narrow (about 280 px): a switch in a row wraps its
+  label and stacks it above the switch, and one whose row partner is hidden jumps to the right, so every
+  switch gets its own line and only small segmented controls share a `UiConfigStack` row
+  (`Wrap = false`, `RowWeight = 1` each). Two segmented controls in one row must both be icon-only or
+  both text: the host pads a strip of icon-only options differently, so a mixed pair never lines up. Keep labels and option names short enough not to truncate at that width. Tabs and rows
+  only change rendering: the values stay in the session's `UiState`, and a field's node id stays its bare
+  key, which is what a `VisibleWhen` resolves against (only an object or array input starts a scope).
+  `BatteryWidgetViewTests` checks every condition names a field in the built tree.
   **Every `UiLength` is a fraction of the view basis, not a pixel** - a bar needs both `MainSize`
   (its box) and `Thickness` (its track), texts beside a `Fill` sibling need a `MainSize`, and
   `Padding` is the corner-radius safe area (`BatteryWidgetView.SafeArea`, radius from the
-  `cornerRadius` surface attribute). Plugins ship no images, so state is colour + a caption.
-  `BatteryWidgetView` sizes the way the host's own Weather widget does: small type, one restrained
-  emphasis per row (the percentage, semibold, in the device colour), `UiSize.FromBasis(fraction)` of
-  the basis with a `maxOfCross` only as a safety rail for a wide, short widget. An absolute pixel
-  ceiling freezes every size a hair above a 1x1 tile and flattens the hierarchy (title, name and
-  percent all render the same size), so size relative to the basis instead. Each `Row` hugs its
-  content (headline + bar tight together) and the `Fill` body centres the row list with a fixed
-  inter-row gap; making the row or its `headline` `Fill` opens slack between the text and its bar and
-  reads as top-aligned text, so keep them content-sized. The tile percentage is the one deliberately
-  large, bold reading (a tile is one device). A progress bar's `StartColor` and `EndColor` are always
-  the same hex - the renderer always paints a `linear-gradient`, and a two-colour battery bar just
-  muddies the reading.
+  `cornerRadius` surface attribute). Plugins ship no images: device icons are `UiShape` paths in
+  `DeviceGlyphs`, drawn in the unit square the renderer scales to the shape's box (so give the box a
+  square `UiFrame`), absolute `M L H V C Q A Z` only, filled nonzero - a solid part clockwise, a
+  cut-out counter-clockwise, and a cut-out never where two solid parts overlap (the winding sums to
+  1 there and it disappears). `BatteryWidgetViewTests` checks every path against the renderer's
+  grammar. A shape's `Color` takes a hex only, not a theme role, so glyphs and rings carry the state
+  colour (`BatteryWidgetRow.Color` for the widget's `colors` scheme, all Apple system colours so every
+  scheme has the same saturation; every scheme shows a level at or below the threshold in red even
+  while charging and a stale or unknown one in grey) and the percentage uses the primary text role. A ring is a full-turn `UiGauge`
+  inside a `UiModifier` with `Frame.AspectRatio = 1` and a `UiLayer` for the gauge, the bolt and the
+  face; the gauge is inset by half the bolt's height minus half its stroke, which puts a charging
+  bolt exactly in the gap the gauge leaves at the top (`StartAngle`/`EndAngle`, 0 is up, clockwise).
+  Every `UiLength` is a fraction of the whole widget's basis, never of a grid cell, so the ring panel
+  estimates its ring diameter (`BatteryWidgetView.Arrange`: the column count that gives the largest
+  ring for the device count and aspect) and sizes each ring's parts reactively from that; a
+  `UiResponsive` picks the aspect bucket. The view builder rejects `Fill`/`MainSize` on a responsive
+  variant's root and on a modifier's child, and `BatteryWidgetViewTests` builds every layout through
+  a real `UiView` to catch that. The list layout sizes the way the host's own Weather widget does:
+  small type, `UiSize.FromBasis(fraction)` with a `maxOfCross` only as a safety rail; each row hugs
+  its content and the `Fill` body centres the rows. Next to a `Fill` sibling a text's measured width
+  is underestimated, so the list percentage has a fixed `MainSize`. A progress bar's `StartColor`
+  and `EndColor` are always the same hex - the renderer always paints a `linear-gradient`.
 - **A widget press refreshes until the user binds flows.** Both widget types set `SupportsFlows`
   (Macro Deck PR 960), so the host runs the actions the user bound to the widget, like a built-in one.
   A tree that declares a `press` event owns the gesture (`treeClaimsGesture`) and the host then skips
