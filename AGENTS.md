@@ -138,6 +138,8 @@ Design knowledge that is not obvious from the code alone:
   inside a `UiModifier` with `Frame.AspectRatio = 1` and a `UiLayer` for the gauge, the bolt and the
   face; the gauge is inset by half the bolt's height minus half its stroke, which puts a charging
   bolt exactly in the gap the gauge leaves at the top (`StartAngle`/`EndAngle`, 0 is up, clockwise).
+  The face (glyph over percentage) must fit the gauge's inner circle, radius about 0.35 of the
+  diameter: the corners of the percentage line are what collide, so check them, not just the height.
   Every `UiLength` is a fraction of the whole widget's basis, never of a grid cell, so the ring panel
   estimates its ring diameter (`BatteryWidgetView.Arrange`: the column count that gives the largest
   ring for the device count and aspect) and sizes each ring's parts reactively from that; a

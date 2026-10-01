@@ -23,6 +23,12 @@ internal static class BatteryWidgetView
     private const double BoltSize = 0.22;
     private const double GaugeInset = (BoltSize - RingThickness) / 2;
     private const double ChargingGapDegrees = 20;
+
+    // The face sits inside the ring's inner circle (radius 0.35): with the percentage, the corners of
+    // a "100%" line under the glyph stay about 0.32 from the centre.
+    private const double FaceGlyph = 0.28;
+    private const double FaceGlyphAlone = 0.44;
+    private const double FacePercent = 0.16;
     private const double NameShare = 0.24;
     private const double TrendShare = 0.19;
 
@@ -241,7 +247,7 @@ internal static class BatteryWidgetView
     {
         var children = new List<UiElement>
         {
-            Ring(row, options, diameter, showPercent: options.ShowPercent, percentSize: 0.19),
+            Ring(row, options, diameter, showPercent: options.ShowPercent),
         };
 
         if (options.ShowNames)
@@ -296,8 +302,7 @@ internal static class BatteryWidgetView
         BatteryWidgetRow row,
         BatteryWidgetOptions options,
         Func<double> diameter,
-        bool showPercent,
-        double percentSize
+        bool showPercent
     )
     {
         var color = row.Color(options.LowThreshold, options.Colors);
@@ -350,7 +355,7 @@ internal static class BatteryWidgetView
                 DeviceGlyphs.For(row.Kind),
                 color,
                 diameter,
-                showPercent ? 0.34 : 0.44
+                showPercent ? FaceGlyph : FaceGlyphAlone
             ),
         };
         if (showPercent)
@@ -360,7 +365,7 @@ internal static class BatteryWidgetView
                 {
                     Key = "pct",
                     Text = row.PercentText(),
-                    Size = OfDiameter(diameter, percentSize),
+                    Size = OfDiameter(diameter, FacePercent),
                     Weight = UiComponentTextWeights.SemiBold,
                     Role = row.Stale ? UiComponentTextRoles.Muted : UiComponentTextRoles.Primary,
                     Align = UiComponentAlignments.Center,
@@ -598,7 +603,7 @@ internal static class BatteryWidgetView
 
         var children = new List<UiElement>
         {
-            Ring(row, options, () => diameter, options.ShowPercent, percentSize: 0.22),
+            Ring(row, options, () => diameter, options.ShowPercent),
             new UiTextRun
             {
                 Key = "name",
@@ -685,7 +690,7 @@ internal static class BatteryWidgetView
                     MainSize = diameter,
                     Direction = UiComponentDirections.Vertical,
                     Justify = UiComponentJustify.Center,
-                    Children = [Ring(row, options, () => diameter, showPercent: false, percentSize: 0)],
+                    Children = [Ring(row, options, () => diameter, showPercent: false)],
                 },
                 new UiStack
                 {
