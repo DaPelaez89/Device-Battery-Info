@@ -1,3 +1,4 @@
+using System.Text.Json;
 using DeviceBatteryInfo.Core;
 using MacroDeck.Ui.Config;
 using MacroDeck.Ui.Config.Options;
@@ -8,7 +9,11 @@ namespace DeviceBatteryInfo.Ui;
 
 internal static class BatteryWidgetConfigView
 {
-    public static UiElement Build(BatteryWidgetOptions current, IReadOnlyList<BatterySlot> devices)
+    public static UiElement Build(
+        BatteryWidgetOptions current,
+        IReadOnlyList<BatterySlot> devices,
+        JsonElement flows = default
+    )
     {
         var sourceIds = new UiState<IReadOnlyList<string>>(current.SourceIds);
         var showBar = new UiState<bool>(current.ShowBar);
@@ -19,6 +24,10 @@ internal static class BatteryWidgetConfigView
         var lowThreshold = new UiState<double>(current.LowThreshold);
         var sort = new UiState<string>(BatteryWidgetOptions.SortValue(current.Sort));
         var title = new UiState<string>(current.Title);
+        // A default JsonElement cannot be serialized into the tree.
+        var flowList = new UiState<JsonElement>(
+            flows.ValueKind == JsonValueKind.Array ? flows : EmptyFlows
+        );
 
         var options = devices
             .Select(d => UiOption.Of(d.Id) with { Label = d.DisplayName })
@@ -115,6 +124,23 @@ internal static class BatteryWidgetConfigView
                     },
                 ],
             },
+            // The host reads flows from the top-level "flows" key, and an editor region is what makes
+            // the desktop draw the split layout.
+            Editor = new UiWidgetEditor
+            {
+                Key = "battery-widget-config-editor",
+                Children =
+                [
+                    new UiActionsListEditor
+                    {
+                        Key = "flows",
+                        Binding = Bind.To(flowList),
+                        CanRun = true,
+                    },
+                ],
+            },
         };
     }
+
+    private static readonly JsonElement EmptyFlows = JsonDocument.Parse("[]").RootElement.Clone();
 }

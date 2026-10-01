@@ -21,7 +21,9 @@ peripherals, right on your deck.
 (level bar, percentage, charging indicator, time to full, battery trend, low-battery threshold):
 
 - **Battery panel** shows several devices at once.
-- **Battery tile** shows a single device. Pressing a widget refreshes the levels immediately.
+- **Battery tile** shows a single device. Pressing a widget refreshes the levels until you assign
+  actions to it; from then on it runs your actions like any other widget (add the "Refresh battery
+  levels" action to keep refreshing).
 
 Widgets update live between polls. The battery trend is shown as a signed change over the window it
 covers, for example `-13%/1h` while discharging or `+28%/30m` while charging. It needs a couple of

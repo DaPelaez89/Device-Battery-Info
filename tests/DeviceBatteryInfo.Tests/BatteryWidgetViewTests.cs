@@ -69,7 +69,9 @@ public sealed class BatteryWidgetViewTests
 
     [TestCase(BatteryWidgetTypes.PanelId)]
     [TestCase(BatteryWidgetTypes.TileId)]
-    public void Without_a_press_callback_the_tree_declares_no_events(string widgetId)
+    public void Without_a_press_handler_the_tree_declares_no_events_so_presses_run_the_flows(
+        string widgetId
+    )
     {
         var state = new UiState<BatteryWidgetModel>(
             new BatteryWidgetModel([Row(72)], BatteryWidgetOptions.Default)
@@ -77,6 +79,43 @@ public sealed class BatteryWidgetViewTests
         var view = new UiView(WidgetSurface(), BatteryWidgetView.Build(widgetId, state, 16));
 
         Assert.That(JsonSerializer.Serialize(view.Tree), Does.Not.Contain("\"events\""));
+    }
+
+    [TestCase("""{}""", ExpectedResult = false)]
+    [TestCase("""{"flows":[]}""", ExpectedResult = false)]
+    [TestCase(
+        """{"flows":[{"triggerType":"onShortPress","children":[]}]}""",
+        ExpectedResult = false
+    )]
+    [TestCase(
+        """{"flows":[{"triggerType":"onShortPress","children":[{"disabled":true}]}]}""",
+        ExpectedResult = false
+    )]
+    [TestCase(
+        """{"flows":[{"triggerType":"onEvent","children":[{"actionId":"x"}]}]}""",
+        ExpectedResult = false
+    )]
+    [TestCase(
+        """{"flows":[{"triggerType":"onShortPress","children":[{"actionId":"x"}]}]}""",
+        ExpectedResult = true
+    )]
+    [TestCase(
+        """{"flows":[{"triggerType":"onLongPress","children":[{"actionId":"x"}]}]}""",
+        ExpectedResult = true
+    )]
+    public bool Only_an_enabled_action_on_a_press_trigger_counts_as_a_press_flow(string data) =>
+        BatteryWidgetTypes.HasPressFlows(JsonDocument.Parse(data).RootElement);
+
+    [Test]
+    public void Missing_widget_data_has_no_press_flows()
+    {
+        Assert.That(BatteryWidgetTypes.HasPressFlows(null), Is.False);
+    }
+
+    [Test]
+    public void Every_widget_type_runs_the_users_flows()
+    {
+        Assert.That(BatteryWidgetTypes.All.Select(t => t.SupportsFlows), Is.All.True);
     }
 
     [TestCase(BatteryWidgetTypes.PanelId)]

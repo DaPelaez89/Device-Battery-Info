@@ -95,7 +95,8 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
             );
         }
 
-        var options = ParseOptions(AttributeJson(surface, UiWidgetSurfaceAttributes.Data));
+        var data = AttributeJson(surface, UiWidgetSurfaceAttributes.Data);
+        var options = ParseOptions(data);
         BatteryWidgetModel Compute() => BuildModel(options);
 
         var initial = Compute();
@@ -107,9 +108,15 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
         );
 
         var state = new UiState<BatteryWidgetModel>(initial);
+        // Saving flows reopens the session, so the refresh stays the press only until the user binds one.
         var view = new UiView(
             surface,
-            BatteryWidgetView.Build(localId, state, cornerRadius, _polling.RequestRefresh)
+            BatteryWidgetView.Build(
+                localId,
+                state,
+                cornerRadius,
+                BatteryWidgetTypes.HasPressFlows(data) ? null : _polling.RequestRefresh
+            )
         );
 
         void Refresh() => state.Set(Compute());
@@ -146,8 +153,12 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
             return null;
         }
 
-        var options = ParseOptions(AttributeJson(surface, UiConfigSurfaceAttributes.WidgetData));
-        var view = new UiView(surface, BatteryWidgetConfigView.Build(options, CurrentSlots()));
+        var data = AttributeJson(surface, UiConfigSurfaceAttributes.WidgetData);
+        var options = ParseOptions(data);
+        var view = new UiView(
+            surface,
+            BatteryWidgetConfigView.Build(options, CurrentSlots(), BatteryWidgetTypes.StoredFlows(data))
+        );
         return new UiViewSession(view);
     }
 

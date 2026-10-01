@@ -12,6 +12,8 @@ internal static class BatteryWidgetView
     private const double BreathingRoomPx = 8;
     private static readonly double CornerClearance = 1 - (1 / Math.Sqrt(2));
 
+    // A press event claims the gesture and the host then skips the widget's flows, so pass onPress
+    // only while the widget has none.
     public static UiElement Build(
         string widgetLocalId,
         UiState<BatteryWidgetModel> state,
