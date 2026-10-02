@@ -1,11 +1,7 @@
-using System.Globalization;
-using System.Text;
-using MacroDeck.Localization;
-
 namespace DeviceBatteryInfo.Ui;
 
 // Text is laid out on the viewing device, so widths are estimated: em widths of SF Pro Semibold,
-// erring wide.
+// erring wide. Only the list percentage needs it; captions are fitted by the reader (UiFirstFit).
 internal static class TextWidth
 {
     private const string NarrowChars = " .,:;'!|iljtfrI-/()[]";
@@ -23,31 +19,4 @@ internal static class TextWidth
             : char.IsUpper(c) || char.IsDigit(c) ? CapitalEm
             : RegularEm
         ) * size;
-
-    // The viewer's culture is unknown, so the widest translation counts.
-    public static double Of(LocalizedText text, double size) =>
-        text.Localized is { } localized
-            ? Strings.LocalizationCatalog.Cultures
-                .Select(culture => Resolve(localized, culture))
-                .OfType<string>()
-                .Select(resolved => Of(resolved, size))
-                .DefaultIfEmpty(0)
-                .Max()
-            : Of(text.Literal, size);
-
-    private static string? Resolve(LocalizedString text, string culture)
-    {
-        if (!Strings.LocalizationCatalog.TryGetTemplate(culture, text.Key.Name, out var template))
-        {
-            return null;
-        }
-
-        var resolved = new StringBuilder(template);
-        foreach (var (name, value) in text.Arguments)
-        {
-            resolved.Replace("{" + name + "}", Convert.ToString(value, CultureInfo.InvariantCulture));
-        }
-
-        return resolved.ToString();
-    }
 }

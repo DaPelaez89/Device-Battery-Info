@@ -369,39 +369,22 @@ public sealed class BatteryWidgetViewTests
             ? children.EnumerateArray().SelectMany(Descendants).Prepend(node)
             : [node];
 
-    [TestCase(1.0, false)]
-    [TestCase(1.3, true)]
-    [TestCase(2.0, true)]
-    public void A_caption_goes_beside_the_name_once_it_fits(double aspect, bool inline)
-    {
-        var mouse = new BatteryWidgetRow(
-            "mouse",
-            "Mouse",
-            82,
-            BatteryStatus.Charging,
-            Charging: true,
-            Stale: false,
-            TimeToFull: "0:35",
-            Kind: BatterySourceKind.Mouse
-        );
-        var options = BatteryWidgetOptions.Default with { Layout = BatteryWidgetLayout.List };
-
-        Assert.That(
-            BatteryWidgetView.CaptionFitsInline(
-                mouse,
-                options,
-                BatteryWidgetView.ListWidth(aspect, hasTitle: false)
-            ),
-            Is.EqualTo(inline)
-        );
-    }
-
     [Test]
-    public void Text_width_resolves_a_localized_caption()
+    public void The_list_offers_inline_rows_before_stacked_ones()
     {
-        var eta = TextWidth.Of(Strings.Widgets.Caption.ChargingEta("0:35"), 1);
+        var model = BatteryWidgetSamples.PanelList();
+        var tree = new UiView(
+            WidgetSurface(),
+            BatteryWidgetView.Build(BatteryWidgetTypes.PanelId, new UiState<BatteryWidgetModel>(model), 16)
+        ).Tree;
+        var json = JsonSerializer.SerializeToElement(tree.Root);
 
-        Assert.That(eta, Is.EqualTo(TextWidth.Of("0:35 to full", 1)).Within(1e-9));
+        var firstFit = Descendants(json).Single(n => n.GetProperty("Type").GetString() == "ui.first-fit");
+        var layouts = firstFit.GetProperty("Children").EnumerateArray().Select(c => c.GetProperty("Id").GetString()).ToArray();
+
+        Assert.That(layouts, Has.Length.EqualTo(2));
+        Assert.That(layouts[0], Does.EndWith("inline"));
+        Assert.That(layouts[1], Does.EndWith("stacked"));
     }
 
     [Test]

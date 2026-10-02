@@ -100,7 +100,7 @@ internal static class BatteryWidgetView
                 Condition = () => state.Value.Rows.Count > 0,
                 Content = () =>
                     options.Layout == BatteryWidgetLayout.List
-                        ? ListBody(state, hasTitle)
+                        ? ListBody(state)
                         : RingBody(state, hasTitle),
             }
         );
@@ -426,59 +426,18 @@ internal static class BatteryWidgetView
     private const double ListGap = 0.03;
     private const double NameSize = 0.082;
     private const double CaptionSize = 0.058;
-    private const double CaptionGap = 0.02;
     private const double PercentSize = 0.09;
-    // The real padding can exceed EdgeInset.
-    private const double FitSlack = 0.02;
 
-    // The host takes the first matching variant, so each bucket ends where the next begins.
-    private static readonly double[] ListAspects = [1.15, 1.3, 1.5, 1.75, 2.0, 2.4, 2.8, 3.4];
-
-    private static UiResponsive ListBody(UiState<BatteryWidgetModel> state, bool hasTitle) =>
+    // The reader measures in the viewer's font and draws the inline rows unless a name or caption
+    // would be cut off. Texts in a row have no shrink priority, and an unsized first-fit would take
+    // the stacked layout's height, so the whole list switches at once.
+    private static UiFirstFit ListBody(UiState<BatteryWidgetModel> state) =>
         new()
         {
             Key = "body",
             Fill = true,
-            Default = ListRows(state, "rows-1", ListWidth(1, hasTitle)),
-            Variants = ListAspects
-                .Select(
-                    (aspect, index) =>
-                        new UiResponsiveVariant
-                        {
-                            MinAspect = aspect,
-                            MaxAspect = index + 1 < ListAspects.Length ? ListAspects[index + 1] : null,
-                            Content = ListRows(state, $"rows-{index + 2}", ListWidth(aspect, hasTitle)),
-                        }
-                )
-                .ToArray(),
+            Children = [ListRows(state, "inline", inline: true), ListRows(state, "stacked", inline: false)],
         };
-
-    // The basis is the widget's short side.
-    internal static double ListWidth(double aspect, bool hasTitle)
-    {
-        var bodyHeight = 1 - (2 * EdgeInset) - (hasTitle ? TitleHeight : 0);
-        return Math.Max(1 - (2 * EdgeInset), aspect * bodyHeight);
-    }
-
-    // Texts in a row have no shrink priority, so an overlong caption truncates the name too.
-    internal static bool CaptionFitsInline(
-        BatteryWidgetRow row,
-        BatteryWidgetOptions options,
-        double width
-    )
-    {
-        if (Caption(row, options) is not { } caption)
-        {
-            return true;
-        }
-
-        var bolt = options.ShowCharging && row.Charging ? ListBolt + ListGap : 0;
-        var percent = options.ShowPercent ? PercentWidth(row) + ListGap : 0;
-        var available = width - ListGlyph - ListGap - bolt - percent;
-        var needed =
-            TextWidth.Of(row.Name, NameSize) + CaptionGap + TextWidth.Of(caption, CaptionSize);
-        return needed + FitSlack <= available;
-    }
 
     // Hugs the text, so the bolt sits next to the number.
     private static double PercentWidth(BatteryWidgetRow row) =>
@@ -487,7 +446,7 @@ internal static class BatteryWidgetView
     private static UiStack ListRows(
         UiState<BatteryWidgetModel> state,
         string key,
-        double width
+        bool inline
     ) =>
         new()
         {
@@ -508,7 +467,7 @@ internal static class BatteryWidgetView
                     Items = UiValue.From(() => state.Value.Rows),
                     KeySelector = row => row.Id,
                     Template = (row, rowKey) =>
-                        ListRow(row, rowKey, state.Value.Options, width),
+                        ListRow(row, rowKey, state.Value.Options, inline),
                 },
             ],
         };
@@ -517,28 +476,27 @@ internal static class BatteryWidgetView
         BatteryWidgetRow row,
         string key,
         BatteryWidgetOptions options,
-        double width
+        bool inline
     )
     {
         var color = row.Color(options.LowThreshold, options.Colors);
         var caption = Caption(row, options);
-        var inlineCaption = CaptionFitsInline(row, options, width);
 
-        var nameGroup = new List<UiElement> { NameText(row.Name) };
+        // Shrinking would count as fitting, so the inline texts keep their size and truncate instead.
+        var name = NameText(row.Name);
+        var nameGroup = new List<UiElement> { inline ? name : name with { MinSize = 0.048 } };
         if (caption is { } captionText)
         {
-            nameGroup.Add(
-                new UiTextRun
-                {
-                    Key = "state",
-                    Text = captionText,
-                    Size = UiSize.FromBasis(CaptionSize, 0.34),
-                    MinSize = 0.04,
-                    Role = UiComponentTextRoles.Muted,
-                    MaxLines = 1,
-                    Wrap = false,
-                }
-            );
+            var captionRun = new UiTextRun
+            {
+                Key = "state",
+                Text = captionText,
+                Size = UiSize.FromBasis(CaptionSize, 0.34),
+                Role = UiComponentTextRoles.Muted,
+                MaxLines = 1,
+                Wrap = false,
+            };
+            nameGroup.Add(inline ? captionRun : captionRun with { MinSize = 0.04 });
         }
 
         var line = new List<UiElement>
@@ -547,12 +505,12 @@ internal static class BatteryWidgetView
             new UiStack
             {
                 Key = "namegroup",
-                Direction = inlineCaption
+                Direction = inline
                     ? UiComponentDirections.Horizontal
                     : UiComponentDirections.Vertical,
-                Align = inlineCaption ? UiComponentAlignments.Baseline : UiComponentAlignments.Start,
+                Align = inline ? UiComponentAlignments.Baseline : UiComponentAlignments.Start,
                 Fill = true,
-                Gap = inlineCaption ? 0.02 : 0.004,
+                Gap = inline ? 0.02 : 0.004,
                 Children = nameGroup,
             },
         };
@@ -620,7 +578,6 @@ internal static class BatteryWidgetView
             Key = "name",
             Text = name,
             Size = UiSize.FromBasis(NameSize, 0.44),
-            MinSize = 0.048,
             Weight = UiComponentTextWeights.Medium,
             Role = UiComponentTextRoles.Secondary,
             MaxLines = 1,
