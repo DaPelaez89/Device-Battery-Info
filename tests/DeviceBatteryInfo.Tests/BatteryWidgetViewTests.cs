@@ -234,7 +234,7 @@ public sealed class BatteryWidgetViewTests
                 r.Declaration.Id.Contains(nameof(BatteryWidgetPreviews), StringComparison.Ordinal)
             )
             .ToArray();
-        Assert.That(ours, Has.Length.EqualTo(9));
+        Assert.That(ours, Has.Length.EqualTo(13));
         using (Assert.EnterMultipleScope())
         {
             Assert.That(

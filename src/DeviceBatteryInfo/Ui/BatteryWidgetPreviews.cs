@@ -29,6 +29,20 @@ internal static class BatteryWidgetPreviews
     public static UiElement PanelList() => PanelOf(BatteryWidgetSamples.PanelList());
 
     [UiPreview(
+        "Panel - list with device colours",
+        View = nameof(BatteryWidgetView),
+        Profile = UiPreviewProfiles.Widget
+    )]
+    public static UiElement PanelListDevice() => PanelOf(BatteryWidgetSamples.PanelListDevice());
+
+    [UiPreview(
+        "Panel - gradient colours",
+        View = nameof(BatteryWidgetView),
+        Profile = UiPreviewProfiles.Widget
+    )]
+    public static UiElement PanelGradient() => PanelOf(BatteryWidgetSamples.PanelGradient());
+
+    [UiPreview(
         "Panel - low battery",
         View = nameof(BatteryWidgetView),
         Profile = UiPreviewProfiles.Widget
@@ -62,6 +76,20 @@ internal static class BatteryWidgetPreviews
         Profile = UiPreviewProfiles.Widget
     )]
     public static UiElement TileLow() => TileOf(BatteryWidgetSamples.TileLow());
+
+    [UiPreview(
+        "Tile - full",
+        View = nameof(BatteryWidgetView),
+        Profile = UiPreviewProfiles.Widget
+    )]
+    public static UiElement TileFull() => TileOf(BatteryWidgetSamples.TileFull());
+
+    [UiPreview(
+        "Tile - no signal",
+        View = nameof(BatteryWidgetView),
+        Profile = UiPreviewProfiles.Widget
+    )]
+    public static UiElement TileNoSignal() => TileOf(BatteryWidgetSamples.TileNoSignal());
 
     private static UiElement PanelOf(BatteryWidgetModel model) =>
         BatteryWidgetView.Build(
