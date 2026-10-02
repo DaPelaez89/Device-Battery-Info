@@ -13,8 +13,13 @@ TESTS    := dotnet test DeviceBatteryInfo.slnx --configuration Release --filter 
 
 RID      := $(if $(filter Windows_NT,$(OS)),win-x64,osx-arm64)
 
+# Store images: every [UiPreview] scenario at each deck shape. Override on the command line,
+# e.g. make preview CELLS="--cells 2x2" PREVIEW_ARGS="--theme light".
+CELLS    := --cells 1x1 --cells 2x1 --cells 2x2
+PREVIEWS := artifacts/previews
+
 .DEFAULT_GOAL := help
-.PHONY: help cli build test test-hardware run watch stub pack conformance update release
+.PHONY: help cli build test test-hardware run watch stub preview pack conformance update release
 
 help:
 	@echo "make cli            install/update the macrodeck-plugin CLI to the SDK version ($$($(SDK)))"
@@ -24,6 +29,7 @@ help:
 	@echo "make run            run the plugin against the running Macro Deck"
 	@echo "make watch          the same, with hot reload / restart on every saved change"
 	@echo "make stub           run the plugin against a disposable stub host (no Macro Deck needed)"
+	@echo "make preview        render the widget previews to PNGs in $(PREVIEWS)/ (store images)"
 	@echo "make pack           build this platform's .macroDeckPlugin ($(RID)) into artifacts/ and inspect it"
 	@echo "make conformance    run the conformance suite, report in conformance.md"
 	@echo "make update         bump every package to its newest release (review the diff)"
@@ -50,6 +56,10 @@ watch:
 
 stub:
 	$(UTF8) macrodeck-plugin run --project $(PROJECT) --stub-host
+
+preview:
+	rm -rf $(PREVIEWS)
+	$(UTF8) macrodeck-plugin preview render --project $(PROJECT) $(CELLS) --output $(PREVIEWS) $(PREVIEW_ARGS)
 
 pack:
 	rm -f artifacts/*.macroDeckPlugin

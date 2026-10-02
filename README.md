@@ -160,6 +160,7 @@ Build and tests need no Macro Deck installation.
 The [Makefile](Makefile) wraps the everyday commands (`make` lists them): `make run` / `make watch`
 launch the plugin against the running Macro Deck through `macrodeck-plugin run` (pairing once, the
 credential kept in `src/DeviceBatteryInfo/.macrodeck-dev-state/`), `make stub` against a stub host,
+`make preview` renders the widget previews to PNGs in `artifacts/previews/` (the store images),
 `make cli` keeps the CLI at the SDK's version, `make pack` builds and inspects the artifact for this
 machine's platform (`win-x64` on Windows, `osx-arm64` otherwise; the release workflow builds both), and
 `make release VERSION=x.y.z` tests and packs, bumps `manifest.json`, commits, tags `vx.y.z` and pushes -
