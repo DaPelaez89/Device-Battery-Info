@@ -252,6 +252,8 @@ public sealed class LinuxHidPathTests
         {
             Assert.That(LinuxHidraw.Request(0x06, 91), Is.EqualTo((nuint)0xC05B4806));
             Assert.That(LinuxHidraw.Request(0x07, 91), Is.EqualTo((nuint)0xC05B4807));
+            Assert.Throws<ArgumentOutOfRangeException>(() => LinuxHidraw.Request(0x06, 0x4000));
+            Assert.Throws<ArgumentOutOfRangeException>(() => LinuxHidraw.Request(0x06, 0));
         }
     }
 
@@ -297,36 +299,74 @@ public sealed class LinuxHidPathTests
 [TestFixture]
 public sealed class LinuxUdevRuleTests
 {
-    private static string RuleFile()
+    private static string RuleFile() => RepositoryFile("packaging", "linux", "70-device-battery-info.rules");
+
+    private static string RepositoryFile(params string[] parts)
     {
         for (var directory = new DirectoryInfo(TestContext.CurrentContext.TestDirectory); directory is not null; directory = directory.Parent)
         {
-            var rule = System.IO.Path.Combine(directory.FullName, "packaging", "linux", "70-device-battery-info.rules");
-            if (File.Exists(rule))
+            var file = System.IO.Path.Combine([directory.FullName, .. parts]);
+            if (File.Exists(file))
             {
-                return File.ReadAllText(rule);
+                return File.ReadAllText(file);
             }
         }
 
-        throw new FileNotFoundException("packaging/linux/70-device-battery-info.rules not found above the test directory.");
+        throw new FileNotFoundException($"{string.Join('/', parts)} not found above the test directory.");
     }
 
-    // Without its line a brand's devices read as not connected on Linux.
-    [Test]
-    public void Every_hid_vendor_has_a_udev_line()
-    {
-        var rule = RuleFile();
-        var vendors = typeof(HidProtocol)
+    private static IEnumerable<(int VendorId, int ProductId)> SupportedUsbIds() =>
+        typeof(HidProtocol)
             .Assembly.GetTypes()
             .Where(t => t is { IsAbstract: false } && t.IsAssignableTo(typeof(HidProtocol)))
-            .Select(t => ((HidProtocol)Activator.CreateInstance(t, nonPublic: true)!).VendorId)
-            .Distinct()
-            .ToArray();
+            .Select(t => (HidProtocol)Activator.CreateInstance(t, nonPublic: true)!)
+            .SelectMany(p => p.Devices.SelectMany(d => d.ProductIds.Select(id => (p.VendorId, id))));
 
-        Assert.That(vendors, Is.Not.Empty);
+    // Without its line a model reads as not connected on Linux.
+    [Test]
+    public void Every_supported_product_id_has_a_udev_line()
+    {
+        var rule = RuleFile();
+        var ids = SupportedUsbIds().ToArray();
+
+        Assert.That(ids, Is.Not.Empty);
         Assert.That(
-            vendors.Where(v => !rule.Contains($"ATTRS{{idVendor}}==\"{v:x4}\"", StringComparison.Ordinal)),
+            ids.Where(id =>
+                !rule.Contains(
+                    $"ATTRS{{idVendor}}==\"{id.VendorId:x4}\", ATTRS{{idProduct}}==\"{id.ProductId:x4}\"",
+                    StringComparison.Ordinal
+                )
+            ),
             Is.Empty
         );
+    }
+
+    // A vendor-wide grant would also expose that vendor's keyboards to every program the user runs.
+    [Test]
+    public void The_rule_never_grants_a_whole_vendor()
+    {
+        var grants = RuleFile()
+            .Split('\n')
+            .Where(line => line.Contains("uaccess", StringComparison.Ordinal) && !line.StartsWith('#'));
+
+        Assert.That(
+            grants.Where(line => !line.Contains("idProduct", StringComparison.Ordinal) && !line.Contains("KERNELS", StringComparison.Ordinal)),
+            Is.Empty
+        );
+    }
+
+    // The guide prints the rule one single-quoted line at a time (fish has no heredocs) instead of
+    // downloading it as root, so the two must not drift apart.
+    [Test]
+    public void The_setup_guide_carries_the_rule_verbatim()
+    {
+        var guide = RepositoryFile("docs", "linux-setup.md");
+        var lines = RuleFile().TrimEnd('\n').Split('\n');
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(lines.Where(line => !guide.Contains($"'{line}'", StringComparison.Ordinal)), Is.Empty);
+            Assert.That(guide, Does.Not.Contain("curl"));
+        }
     }
 }

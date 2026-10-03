@@ -63,8 +63,9 @@ sits on `LogitechHidppProtocol`, which holds the framing every Logitech device s
 Logitech device is a feature id, a function and a parser. What each part means:
 
 - `vendorId` is the brand's USB vendor id. `reportLength` is the smallest report the right interface
-  supports. On Linux a hidraw node is readable only with a udev rule, so a new vendor id also needs a line
-  in `packaging/linux/70-device-battery-info.rules`.
+  supports. On Linux a hidraw node is readable only with a udev rule, so every new product id also needs a
+  line in `packaging/linux/70-device-battery-info.rules`, and the guide's inline copy in
+  [linux-setup.md](linux-setup.md) must match it (a test checks both).
 - Most brands (Razer) exchange **feature reports**, which is the default. Some (Logitech HID++) write an
   output report and read input reports on a vendor interface instead. For those pass
   `HidReportKind.InputOutput` and the interface's `usagePage`/`usage` to the base constructor, as
@@ -89,7 +90,7 @@ Logitech device is a feature id, a function and a parser. What each part means:
 To see what your device exposes, run `HardwareTests` (`dotnet test --filter Category=Hardware` from
 `tests/DeviceBatteryInfo.Tests`). It lists every HID interface of the supported brands with its report
 sizes and usage page, then reads each supported device the way the plugin does. Add your brand's protocol
-to its `Protocols` list. On Linux, install the [udev rule](linux-setup.md) (with your vendor id added)
+to its `Protocols` list. On Linux, install the [udev rule](linux-setup.md) (with your product ids added)
 first, or every interface reads as unopenable.
 
 `Sources/Razer/RazerProtocol.cs` is a complete real example. Keep the byte layout in small `static`

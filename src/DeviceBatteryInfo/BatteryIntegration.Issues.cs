@@ -39,7 +39,7 @@ public sealed partial class BatteryIntegration : IIntegrationIssueProvider
     internal Action<string> OpenInBrowser { get; set; } = OpenWithDesktop;
 
     // The SDK has no follow-up that opens a link, but the plugin runs in the user's desktop session, so it
-    // opens the guide itself (xdg-open on Linux). The issue clears on the next poll once the device opens.
+    // opens the guide itself. The issue clears on the next poll once the device opens.
     public Task<IssueResolution> ResolveIssueAsync(string issueId, CancellationToken cancellationToken = default)
     {
         if (issueId != LinuxDeviceAccessIssueId)
@@ -52,7 +52,8 @@ public sealed partial class BatteryIntegration : IIntegrationIssueProvider
             OpenInBrowser(LinuxSetupGuideUrl);
             return Task.FromResult(IssueResolution.Ok(Strings.Issues.LinuxDeviceAccess.Opened()));
         }
-        catch (Exception exception) when (exception is Win32Exception or InvalidOperationException)
+        catch (Exception exception)
+            when (exception is Win32Exception or InvalidOperationException or PlatformNotSupportedException)
         {
             _logger.Warning(exception, "Could not open the Linux setup guide {Url}.", LinuxSetupGuideUrl);
             return Task.FromResult(
@@ -61,8 +62,16 @@ public sealed partial class BatteryIntegration : IIntegrationIssueProvider
         }
     }
 
+    // No shell and no PATH lookup: the URL is one argument to an absolute xdg-open, like every other tool.
     private static void OpenWithDesktop(string url)
     {
-        using var browser = Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        if (!OperatingSystem.IsLinux())
+        {
+            throw new PlatformNotSupportedException("The setup guide is only opened on Linux.");
+        }
+
+        var start = new ProcessStartInfo("/usr/bin/xdg-open") { UseShellExecute = false };
+        start.ArgumentList.Add(url);
+        using var browser = Process.Start(start);
     }
 }

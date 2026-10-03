@@ -98,9 +98,10 @@ tests/DeviceBatteryInfo.Tests/
                                   every supported HID device through the plugin, and reads one again while a
                                   foreign poller hammers the same control interface (the Synapse case); all
                                   output goes through HardwareReport so every line has the same shape
-docs/linux-setup.md               end-user guide the Linux issue links to (installs the rule by URL)
-packaging/linux/70-device-battery-info.rules   udev rule granting the seat user the HID vendors' hidraw
-                                  nodes; one line per HidProtocol vendor id (LinuxUdevRuleTests checks it)
+docs/linux-setup.md               end-user guide the Linux issue opens; carries the udev rule inline
+packaging/linux/70-device-battery-info.rules   udev rule granting the seat user the hidraw nodes of the
+                                  supported models only; one line per product id (LinuxUdevRuleTests
+                                  checks it, and that the guide's copy is identical)
 ```
 
 Design knowledge that is not obvious from the code alone:
@@ -299,7 +300,8 @@ Design knowledge that is not obvious from the code alone:
   keys. Brand and model names are proper nouns and are the one deliberate exception to the
   no-user-facing-literal rule. Do not add a `DeviceType` value, config key or config-flow branch for a
   family; that is exactly what this design removed. Adding or removing a model also means updating the
-  "Supported devices" table in `README.md`. See `docs/adding-a-device.md`.
+  "Supported devices" table in `README.md` and, for a USB HID model, the Linux udev rule and its copy in
+  `docs/linux-setup.md`. See `docs/adding-a-device.md`.
 - **HID feature reports are shared plumbing plus a base family; Razer is the first protocol on it.**
   `Sources/Hid/` holds `NativeHid` (raw `hid.dll` feature-report interop), `IHidTransport`/
   `HidSharpTransport` (enumeration plus a protocol-agnostic `ExchangeAsync` that retries until the
@@ -464,14 +466,20 @@ Design knowledge that is not obvious from the code alone:
   On Linux `BatteryIntegration` turns that into an Error integration issue naming the entries (only those
   still in `DeviceCatalog`, so a deleted entry drops out). An issue's button runs only `ResolveIssueAsync`
   and the SDK's follow-ups are `None` or `StartConfigFlow`, so the plugin opens `docs/linux-setup.md`
-  itself (`Process.Start` with `UseShellExecute`, which is `xdg-open` on Linux, as System-Media does for
-  its VLC add-on) and a failure toast carries the URL. The host re-lists issues on its own; the issue
+  itself, as System-Media does for its VLC add-on, and a failure toast carries the URL. It runs
+  `/usr/bin/xdg-open` with the URL as its one argument: never `UseShellExecute` (a PATH lookup in the
+  host's environment, and the pattern a Store review already rejected once as PowerShell). The host re-lists issues on its own; the issue
   clears at the next poll once the device opens. Removing the udev rule does not revoke access until the
   device is replugged or `udevadm trigger` runs, so test the issue only after that.
   `GetIssuesAsync` is polled by the host and must stay a read of recorded state. The beta.15
-  `PluginTestHarness` has no `Issues` member yet, so tests call the integration from the harness's DI. The rule tags the vendors' nodes `uaccess`, which must happen before
-  `73-seat-late.rules`, hence the `70-` prefix; Bluetooth HID nodes (uhid) have no USB vendor attribute
-  and are not covered. Read on Linux: the Razer DeathAdder V3 Pro (dongle and cable).
+  `PluginTestHarness` has no `Issues` member yet, so tests call the integration from the harness's DI.
+  **The udev rule is a security boundary.** It tags `uaccess` (which must happen before
+  `73-seat-late.rules`, hence the `70-` prefix) per supported USB product id, never per vendor: a vendor
+  grant would let every program the user runs read that vendor's keyboards. A Bluetooth HID node (uhid)
+  has no USB attributes and is matched by its HID device name instead (`KERNELS=="0005:054C:0CE6.*"`
+  for the DualSense, unverified). The guide prints the rule inline, one single-quoted `printf` argument per line, into `sudo tee`
+  (fish, the default on CachyOS, has no heredocs); never tell users to
+  download it as root from a branch, because a udev rule can `RUN+=` any program as root. Read on Linux: the Razer DeathAdder V3 Pro (dongle and cable).
 
 Authoritative upstream documentation is at <https://docs.macro-deck.app/> (the Macro Deck 3 repository itself is not public):
 [plugin hosting](https://docs.macro-deck.app/reference/plugin-hosting/) (builder, registration modes, manifest, artifact,

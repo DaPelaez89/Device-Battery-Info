@@ -13,6 +13,7 @@ internal static class LinuxHidraw
     private const uint HidrawType = 'H';
     private const uint SetFeatureNumber = 0x06;
     private const uint GetFeatureNumber = 0x07;
+    private const int MaxReportLength = 0x3FFF;
 
     // Classic DllImport, matching NativeHid. ioctl is variadic, which x64 and arm64 Linux pass like fixed args.
     [SupportedOSPlatform("linux")]
@@ -40,8 +41,11 @@ internal static class LinuxHidraw
     internal static void GetFeature(SafeFileHandle handle, byte[] report) =>
         Call(handle, GetFeatureNumber, report, "HIDIOCGFEATURE");
 
+    // The size field has 14 bits; a longer length would spill into the direction bits and name another ioctl.
     internal static nuint Request(uint number, int length) =>
-        ((IocRead | IocWrite) << 30) | ((uint)length << 16) | (HidrawType << 8) | number;
+        length is > 0 and <= MaxReportLength
+            ? ((IocRead | IocWrite) << 30) | ((uint)length << 16) | (HidrawType << 8) | number
+            : throw new ArgumentOutOfRangeException(nameof(length), length, "Not a valid hidraw report length.");
 
     [SupportedOSPlatform("linux")]
     private static void Call(SafeFileHandle handle, uint number, byte[] report, string name)
