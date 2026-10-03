@@ -20,6 +20,7 @@ public sealed partial class BatteryIntegration(
     DeviceCatalog catalog,
     DeviceModelCatalog models,
     IDeviceDiscovery discovery,
+    DeviceAccessProblems accessProblems,
     ILogger logger
 ) : IPluginIntegration, IVariableProvider, IEventProvider, IConfigFlowProvider
 {
@@ -35,6 +36,7 @@ public sealed partial class BatteryIntegration(
     private readonly DeviceCatalog _catalog = catalog;
     private readonly DeviceModelCatalog _models = models;
     private readonly IDeviceDiscovery _discovery = discovery;
+    private readonly DeviceAccessProblems _accessProblems = accessProblems;
     private readonly ILogger _logger = logger.ForContext<BatteryIntegration>();
 
     private IIntegrationContext? _context;

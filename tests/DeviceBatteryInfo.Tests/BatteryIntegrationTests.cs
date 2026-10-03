@@ -173,6 +173,74 @@ public sealed class BatteryIntegrationTests
         public ValueTask<BatteryReading> ReadAsync(CancellationToken cancellationToken) =>
             ValueTask.FromResult(BatteryReading.Unavailable);
     }
+
+    private static async Task<IReadOnlyList<MacroDeck.Sdk.Issues.IntegrationIssue>> IssuesAsync(
+        PluginTestHarness harness
+    ) => await harness.Services.GetRequiredService<BatteryIntegration>().GetIssuesAsync();
+
+    [Test]
+    public async Task A_blocked_device_raises_the_linux_setup_issue_only_on_linux()
+    {
+        await using var harness = CreateHarness();
+        SeedDevices(harness);
+        harness.Services.GetRequiredService<DeviceAccessProblems>().MarkBlocked("headset");
+
+        var issues = await IssuesAsync(harness);
+
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.That(issues, Is.Empty);
+            return;
+        }
+
+        Assert.That(issues, Has.Count.EqualTo(1));
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(issues[0].Id, Is.EqualTo(BatteryIntegration.LinuxDeviceAccessIssueId));
+            Assert.That(issues[0].Severity, Is.EqualTo(MacroDeck.Sdk.Issues.IntegrationIssueSeverity.Error));
+        }
+    }
+
+    [Test]
+    public async Task A_removed_entry_no_longer_raises_the_issue()
+    {
+        await using var harness = CreateHarness();
+        harness.Services.GetRequiredService<DeviceAccessProblems>().MarkBlocked("gone");
+        SeedDevices(harness);
+
+        Assert.That(await IssuesAsync(harness), Is.Empty);
+    }
+
+    [Test]
+    public async Task Resolving_opens_the_setup_guide_and_an_unknown_issue_fails()
+    {
+        await using var harness = CreateHarness();
+        var integration = harness.Services.GetRequiredService<BatteryIntegration>();
+        var opened = new List<string>();
+        integration.OpenInBrowser = opened.Add;
+
+        var known = await integration.ResolveIssueAsync(BatteryIntegration.LinuxDeviceAccessIssueId);
+        var unknown = await integration.ResolveIssueAsync("something-else");
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(known.Success, Is.True);
+            Assert.That(opened, Is.EqualTo(new[] { BatteryIntegration.LinuxSetupGuideUrl }));
+            Assert.That(unknown.Success, Is.False);
+        }
+    }
+
+    [Test]
+    public async Task Without_a_browser_the_failure_still_carries_the_guide()
+    {
+        await using var harness = CreateHarness();
+        var integration = harness.Services.GetRequiredService<BatteryIntegration>();
+        integration.OpenInBrowser = _ => throw new System.ComponentModel.Win32Exception("no xdg-open");
+
+        var resolution = await integration.ResolveIssueAsync(BatteryIntegration.LinuxDeviceAccessIssueId);
+
+        Assert.That(resolution.Success, Is.False);
+    }
 }
 
 [TestFixture]

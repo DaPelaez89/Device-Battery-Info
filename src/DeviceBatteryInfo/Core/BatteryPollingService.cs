@@ -26,7 +26,7 @@ public sealed class BatteryPollingService(
         }
         catch (SemaphoreFullException)
         {
-            // A refresh is already pending; nothing to do
+            // A refresh is already pending.
         }
     }
 

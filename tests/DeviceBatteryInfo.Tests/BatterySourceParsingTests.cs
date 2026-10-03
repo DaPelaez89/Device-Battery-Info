@@ -161,7 +161,7 @@ public sealed class RazerProtocolTests
             Assert.That(request[5], Is.EqualTo(0x02));
             Assert.That(request[6], Is.EqualTo(0x07));
             Assert.That(request[7], Is.EqualTo(0x80));
-            // XOR of bytes 3..87: only 0x02, 0x07 and 0x80 are non-zero
+            // XOR of bytes 3..87, where only 0x02, 0x07 and 0x80 are non-zero.
             Assert.That(request[88], Is.EqualTo(0x02 ^ 0x07 ^ 0x80));
         }
     }
@@ -179,11 +179,12 @@ public sealed class RazerProtocolTests
 
     private static byte[] CompletedFrame(byte commandId, byte value)
     {
+        // Status successful, the power class and the command echoed, the value as the first argument.
         var report = new byte[91];
-        report[1] = 0x02; // status: successful
-        report[7] = 0x07; // command class echo: power
-        report[8] = commandId; // command id echo
-        report[10] = value; // Razer argument 1
+        report[1] = 0x02;
+        report[7] = 0x07;
+        report[8] = commandId;
+        report[10] = value;
         return report;
     }
 

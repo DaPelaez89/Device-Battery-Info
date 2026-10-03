@@ -22,7 +22,7 @@ public sealed class HidFamilyTests
         ) =>
             candidates
                 .Where(c => interfaceNumber is null || c.InterfaceNumber == interfaceNumber)
-                .Where(c => c.FeatureReportLength >= minFeatureReportLength)
+                .Where(c => c.CouldNotOpen || c.FeatureReportLength >= minFeatureReportLength)
                 .ToArray();
 
         public IReadOnlyList<HidCandidate> ListFeatureReportDevices() => candidates;
@@ -79,14 +79,20 @@ public sealed class HidFamilyTests
             CatalogDeviceId: "razer-deathadder-v3-pro"
         );
 
+    private static Task<IReadOnlyList<IBatterySource>> DiscoverAsync(
+        FakeTransport transport,
+        params BatterySlot[] slots
+    ) => DiscoverAsync(transport, new DeviceAccessProblems(), slots);
+
     private static async Task<IReadOnlyList<IBatterySource>> DiscoverAsync(
         FakeTransport transport,
+        DeviceAccessProblems accessProblems,
         params BatterySlot[] slots
     )
     {
         var catalog = new DeviceCatalog();
         catalog.Set(slots);
-        var family = new HidFamily([new RazerProtocol()], transport, Serilog.Core.Logger.None);
+        var family = new HidFamily([new RazerProtocol()], transport, Serilog.Core.Logger.None, accessProblems);
         return await new DeviceFamilyProvider([family], catalog).DiscoverAsync(
             CancellationToken.None
         );
@@ -145,5 +151,57 @@ public sealed class HidFamilyTests
         var sources = await DiscoverAsync(transport, MouseSlot("mouse-a", "Mouse A"), MouseSlot("mouse-b", "Mouse B"));
 
         Assert.That(sources.Select(s => s.Id), Is.EqualTo(["mouse-a"]));
+    }
+
+    // A hidraw node without the udev rule: present, but every report length reads as 0.
+    private static HidCandidate Refused(int iface) =>
+        Candidate(iface) with { FeatureReportLength = 0 };
+
+    [Test]
+    public async Task A_connected_device_that_cannot_be_opened_is_recorded_and_not_probed()
+    {
+        var problems = new DeviceAccessProblems();
+        var transport = new FakeTransport(Refused(0), Refused(2));
+
+        var sources = await DiscoverAsync(transport, problems, MouseSlot("mouse", "Mouse"));
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(sources, Is.Empty);
+            Assert.That(transport.Queried, Is.Empty);
+            Assert.That(problems.IsBlocked("mouse"), Is.True);
+        }
+    }
+
+    [Test]
+    public async Task Access_or_absence_clears_the_record()
+    {
+        var problems = new DeviceAccessProblems();
+        await DiscoverAsync(new FakeTransport(Refused(0)), problems, MouseSlot("mouse", "Mouse"));
+        await DiscoverAsync(new FakeTransport(Candidate(2)), problems, MouseSlot("mouse", "Mouse"));
+        var readable = problems.IsBlocked("mouse");
+
+        await DiscoverAsync(new FakeTransport(Refused(0)), problems, MouseSlot("mouse", "Mouse"));
+        await DiscoverAsync(new FakeTransport(), problems, MouseSlot("mouse", "Mouse"));
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(readable, Is.False);
+            Assert.That(problems.IsBlocked("mouse"), Is.False);
+        }
+    }
+
+    [Test]
+    public async Task One_readable_interface_is_enough()
+    {
+        var problems = new DeviceAccessProblems();
+
+        var sources = await DiscoverAsync(new FakeTransport(Refused(0), Candidate(2)), problems, MouseSlot("mouse", "Mouse"));
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(sources, Has.Count.EqualTo(1));
+            Assert.That(problems.IsBlocked("mouse"), Is.False);
+        }
     }
 }

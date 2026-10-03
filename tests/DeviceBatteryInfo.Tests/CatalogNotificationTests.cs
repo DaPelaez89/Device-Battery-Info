@@ -50,7 +50,7 @@ public sealed class CatalogNotificationTests
                     BatteryReading.FromPercent(50, BatteryStatus.Discharging)
                 )
         );
-        // let any stray fire-and-forget work settle
+        // Lets any stray fire-and-forget work settle.
         await Task.Delay(200);
     }
 
@@ -73,6 +73,7 @@ public sealed class CatalogNotificationTests
             catalog,
             TestModels.Catalog(),
             new NoDiscovery(),
+            new DeviceAccessProblems(),
             Serilog.Core.Logger.None
         );
     }

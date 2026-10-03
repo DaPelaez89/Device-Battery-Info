@@ -20,10 +20,14 @@ internal sealed record HidCandidate(
     IReadOnlyList<(int Page, int Usage)>? Usages = null
 )
 {
-    // macOS presents one device per interface with every top-level collection inside it, while Windows
-    // presents one device per collection, so the first usage alone is not enough to find a vendor collection.
+    // macOS and Linux present one device per interface with every top-level collection inside it, Windows one
+    // per collection, so the first usage alone is not enough to find a vendor collection.
     public bool HasUsage(int? page, int? usage) =>
         Usages is { } all ? all.Contains((page ?? -1, usage ?? -1)) : UsagePage == page && Usage == usage;
+
+    // Every HID interface has at least one report, so no length at all means it could not be opened: on Linux
+    // a hidraw node without the udev rule, which would otherwise look exactly like an absent device.
+    public bool CouldNotOpen => FeatureReportLength == 0 && InputReportLength == 0 && OutputReportLength == 0;
 }
 
 // Plumbing only: a protocol owns its report layout and passes finished request bytes in.
@@ -79,7 +83,7 @@ internal sealed partial class HidSharpTransport : IHidTransport
     public HidSharpTransport(ILogger logger)
         : this(logger, OpenPlatformChannel, boundBlockingOpen: !OperatingSystem.IsWindows()) { }
 
-    // HidSharp retries a refused open for about a second on macOS, so there the whole exchange is
+    // HidSharp retries a refused open for about a second on macOS, so off Windows the whole exchange is
     // bounded by its budget instead of blocking the poll.
     internal HidSharpTransport(
         ILogger logger,
@@ -93,15 +97,20 @@ internal sealed partial class HidSharpTransport : IHidTransport
     }
 
     private static IFeatureChannel OpenPlatformChannel(string devicePath) =>
-        OperatingSystem.IsWindows()
-            ? new NativeFeatureChannel(NativeHid.Open(devicePath))
-            : new HidSharpFeatureChannel(devicePath);
+        OperatingSystem.IsWindows() ? new NativeFeatureChannel(NativeHid.Open(devicePath))
+        : OperatingSystem.IsLinux() ? new LinuxFeatureChannel(LinuxHidraw.Open(devicePath))
+        : new HidSharpFeatureChannel(devicePath);
 
     [GeneratedRegex(
         @"mi_(?<n>[0-9a-fA-F]{1,2})|IOUSBHostInterface@(?<n>[0-9a-fA-F]+)",
         RegexOptions.IgnoreCase
     )]
     private static partial Regex InterfacePattern();
+
+    // Linux paths are sysfs paths through the USB interface node, "<port>:<config>.<interface>" in decimal,
+    // e.g. /sys/devices/.../usb1/1-5/1-5.3/1-5.3:1.1/0003:1532:00B7.0002/hidraw/hidraw1.
+    [GeneratedRegex(@"^(?<unit>/sys/devices/.*)/\d+-[\d.]+:\d+\.(?<n>\d+)/")]
+    internal static partial Regex LinuxUsbInterfacePattern();
 
     public IReadOnlyList<HidCandidate> FindCandidates(
         int vendorId,
@@ -112,7 +121,7 @@ internal sealed partial class HidSharpTransport : IHidTransport
         DeviceList
             .Local.GetHidDevices(vendorId, productId)
             .Select(d => Describe(d, withUsage: true))
-            .Where(c => c.FeatureReportLength >= minFeatureReportLength)
+            .Where(c => c.CouldNotOpen || c.FeatureReportLength >= minFeatureReportLength)
             .Where(c => interfaceNumber is null || c.InterfaceNumber == interfaceNumber)
             // Which HID collection answers varies by model, so try them in ascending order and let the caller's
             // probe decide.
@@ -392,6 +401,12 @@ internal sealed partial class HidSharpTransport : IHidTransport
 
     internal static int? ParseInterfaceNumber(string devicePath)
     {
+        var linux = LinuxUsbInterfacePattern().Match(devicePath);
+        if (linux.Success)
+        {
+            return int.Parse(linux.Groups["n"].Value, System.Globalization.CultureInfo.InvariantCulture);
+        }
+
         var match = InterfacePattern().Match(devicePath);
         return match.Success
             ? int.Parse(match.Groups["n"].Value, System.Globalization.NumberStyles.HexNumber, null)

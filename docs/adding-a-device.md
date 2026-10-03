@@ -21,7 +21,8 @@ new("Some Wireless Mouse", 0x00AB, 0x00AA),   // dongle, cable
 ```
 
 A wireless mouse has one product id for its dongle and another when it is plugged in with the cable
-(Device Manager, hardware ids: `VID_1532&PID_00AB`). Leave the cable one out and the mouse disappears as
+(Device Manager's hardware ids `VID_1532&PID_00AB` on Windows, `lsusb` on Linux, System Information on
+macOS). Leave the cable one out and the mouse disappears as
 soon as it is wired. Run the hardware tests once in each mode to find them and to check that both answer:
 
 ```
@@ -62,7 +63,9 @@ sits on `LogitechHidppProtocol`, which holds the framing every Logitech device s
 Logitech device is a feature id, a function and a parser. What each part means:
 
 - `vendorId` is the brand's USB vendor id. `reportLength` is the smallest report the right interface
-  supports.
+  supports. On Linux a hidraw node is readable only with a udev rule, so every new product id also needs a
+  line in `packaging/linux/70-device-battery-info.rules`, and the guide's inline copy in
+  [linux-setup.md](linux-setup.md) must match it (a test checks both).
 - Most brands (Razer) exchange **feature reports**, which is the default. Some (Logitech HID++) write an
   output report and read input reports on a vendor interface instead. For those pass
   `HidReportKind.InputOutput` and the interface's `usagePage`/`usage` to the base constructor, as
@@ -87,7 +90,8 @@ Logitech device is a feature id, a function and a parser. What each part means:
 To see what your device exposes, run `HardwareTests` (`dotnet test --filter Category=Hardware` from
 `tests/DeviceBatteryInfo.Tests`). It lists every HID interface of the supported brands with its report
 sizes and usage page, then reads each supported device the way the plugin does. Add your brand's protocol
-to its `Protocols` list.
+to its `Protocols` list. On Linux, install the [udev rule](linux-setup.md) (with your product ids added)
+first, or every interface reads as unopenable.
 
 `Sources/Razer/RazerProtocol.cs` is a complete real example. Keep the byte layout in small `static`
 methods (`BuildRequest`, `IsCompletedResponse`) so a test can check them without a device.

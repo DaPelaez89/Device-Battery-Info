@@ -6,9 +6,9 @@ plugged in and tested - the fastest way to make it more useful is to add the one
 ## Ways to contribute
 
 - **Add a device backend.** [`docs/adding-a-device.md`](docs/adding-a-device.md) walks through the
-  interfaces involved (`IBatterySource`, `IBatterySourceProvider`) and where a new backend registers
-  itself. Most device PRs touch one new folder under `Sources/`, one catalog entry, and a handful of
-  tests.
+  cases: one line for another model of a known brand, one `HidProtocol` class for a new USB HID brand, or
+  one device family for anything else. Each registers itself; most device PRs touch one new folder under
+  `Sources/`, the supported-devices table in the README, and a handful of tests.
 - **Report a bug** or **request a device** you don't have time to implement yourself, using the issue
   templates.
 - **Improve the docs.** [AGENTS.md](AGENTS.md) and [`docs/adding-a-device.md`](docs/adding-a-device.md)

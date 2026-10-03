@@ -1,13 +1,13 @@
 namespace DeviceBatteryInfo.Core;
 
-// A source that cannot answer must return Unavailable, not a zero percentage
+// A source that cannot answer must return Unavailable, not a zero percentage.
 public sealed record BatteryReading
 {
     public int? Percent { get; init; }
 
     public BatteryStatus Status { get; init; } = BatteryStatus.Unknown;
 
-    // Rarely available outside the host system's own battery
+    // Rarely available outside the host system's own battery.
     public TimeSpan? TimeToFull { get; init; }
 
     public TimeSpan? TimeToEmpty { get; init; }

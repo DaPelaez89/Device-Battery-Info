@@ -33,18 +33,18 @@ public sealed class HardwareTests
 
     [SetUp]
     public void RequireSupportedPlatform() =>
-        Assume.That(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS());
+        Assume.That(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() || OperatingSystem.IsLinux());
 
     private static IBluetoothBatteryReader PlatformBluetoothReader() =>
-        OperatingSystem.IsMacOS()
-            ? new MacBluetoothBatteryReader(Serilog.Core.Logger.None)
-            : new PowerShellPnpBatteryReader();
+        OperatingSystem.IsMacOS() ? new MacBluetoothBatteryReader(Serilog.Core.Logger.None)
+        : OperatingSystem.IsLinux() ? new BlueZBatteryReader()
+        : new PowerShellPnpBatteryReader();
 
     [Test]
     public async Task Reads_the_system_battery()
     {
-        ISystemPowerReader reader = OperatingSystem.IsMacOS()
-            ? new MacSystemPowerReader()
+        ISystemPowerReader reader = OperatingSystem.IsMacOS() ? new MacSystemPowerReader()
+            : OperatingSystem.IsLinux() ? new LinuxSystemPowerReader()
             : new WindowsSystemPowerReader();
 
         var reading = await reader.ReadAsync(CancellationToken.None);

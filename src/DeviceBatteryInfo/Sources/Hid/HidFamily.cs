@@ -7,13 +7,15 @@ namespace DeviceBatteryInfo.Sources.Hid;
 internal sealed class HidFamily(
     IEnumerable<HidProtocol> protocols,
     IHidTransport transport,
-    ILogger logger
+    ILogger logger,
+    DeviceAccessProblems? accessProblems = null
 ) : IDeviceFamily
 {
     private sealed record HidModel(HidProtocol Protocol, HidDeviceInfo Device)
         : DeviceModel(Protocol.Brand, Device.Name, Device.Kind);
 
     private readonly ILogger _logger = logger.ForContext<HidFamily>();
+    private readonly DeviceAccessProblems _accessProblems = accessProblems ?? new();
 
     // A dongle keeps its path while plugged into the same port, so remember which interface answered.
     private readonly ConcurrentDictionary<string, string> _resolvedPaths = new(
@@ -33,7 +35,7 @@ internal sealed class HidFamily(
         {
             var model = (HidModel)byModel.First().Model;
             var slots = byModel.Select(e => e.Slot).OrderBy(s => s.Id, StringComparer.Ordinal).ToArray();
-            IReadOnlyList<HidCandidate> candidates =
+            IReadOnlyList<HidCandidate> found =
             [
                 .. model.Device.ProductIds.SelectMany(productId =>
                     transport.FindCandidates(
@@ -44,8 +46,13 @@ internal sealed class HidFamily(
                             ? model.Protocol.ReportLength
                             : 0
                     )
-                ).Where(c => Matches(model.Protocol, c)),
+                ),
             ];
+            IReadOnlyList<HidCandidate> candidates =
+            [
+                .. found.Where(c => !c.CouldNotOpen && Matches(model.Protocol, c)),
+            ];
+            TrackAccess(model, slots, blocked: candidates.Count == 0 && found.Any(c => c.CouldNotOpen));
 
             // One entry may use any interface. Two entries for the same model must not both claim
             // whichever unit answers first, so each gets its own.
@@ -104,6 +111,27 @@ internal sealed class HidFamily(
         return sources;
     }
 
+    private void TrackAccess(HidModel model, BatterySlot[] slots, bool blocked)
+    {
+        foreach (var slot in slots)
+        {
+            if (!blocked)
+            {
+                _accessProblems.MarkReachable(slot.Id);
+            }
+            else if (_accessProblems.MarkBlocked(slot.Id))
+            {
+                _logger.Warning(
+                    "{Brand} {Product} is connected but could not be opened, so {DeviceId} cannot be read. On Linux "
+                        + "its hidraw nodes need the udev rule from docs/linux-setup.md.",
+                    model.Brand,
+                    model.Name,
+                    slot.Id
+                );
+            }
+        }
+    }
+
     private static bool Matches(HidProtocol protocol, HidCandidate candidate) =>
         protocol.ReportKind == HidReportKind.Feature
         || (
@@ -124,6 +152,12 @@ internal sealed class HidFamily(
         if (interfaceNode > 0)
         {
             return "m:" + candidate.Path[..interfaceNode].ToLowerInvariant();
+        }
+
+        var linux = HidSharpTransport.LinuxUsbInterfacePattern().Match(candidate.Path);
+        if (linux.Success)
+        {
+            return "l:" + linux.Groups["unit"].Value;
         }
 
         var parts = candidate.Path.Split('#');

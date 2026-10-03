@@ -6,7 +6,7 @@ namespace DeviceBatteryInfo.Core;
 // step replaces the segment with a new immutable instance instead of mutating one.
 public sealed class BatteryTrendTracker
 {
-    // Bounds how far back a rate can look, so a segment cannot grow unbounded in memory
+    // Bounds how far back a rate can look, so a segment cannot grow unbounded in memory.
     private static readonly TimeSpan MaxHistory = TimeSpan.FromHours(3);
 
     // Below this the delta is dominated by poll jitter rather than the device's actual drain, so
