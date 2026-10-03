@@ -20,6 +20,11 @@ internal static class BatterySourceRegistration
             services.AddSingleton<IBluetoothBatteryReader, MacBluetoothBatteryReader>();
             services.AddSingleton<ISystemPowerReader, MacSystemPowerReader>();
         }
+        else if (OperatingSystem.IsLinux())
+        {
+            services.AddSingleton<IBluetoothBatteryReader, BlueZBatteryReader>();
+            services.AddSingleton<ISystemPowerReader, LinuxSystemPowerReader>();
+        }
         else
         {
             services.AddSingleton<IBluetoothBatteryReader, PowerShellPnpBatteryReader>();
