@@ -293,3 +293,40 @@ public sealed class LinuxHidPathTests
         }
     }
 }
+
+[TestFixture]
+public sealed class LinuxUdevRuleTests
+{
+    private static string RuleFile()
+    {
+        for (var directory = new DirectoryInfo(TestContext.CurrentContext.TestDirectory); directory is not null; directory = directory.Parent)
+        {
+            var rule = System.IO.Path.Combine(directory.FullName, "packaging", "linux", "70-device-battery-info.rules");
+            if (File.Exists(rule))
+            {
+                return File.ReadAllText(rule);
+            }
+        }
+
+        throw new FileNotFoundException("packaging/linux/70-device-battery-info.rules not found above the test directory.");
+    }
+
+    // Without its line a brand's devices read as not connected on Linux.
+    [Test]
+    public void Every_hid_vendor_has_a_udev_line()
+    {
+        var rule = RuleFile();
+        var vendors = typeof(HidProtocol)
+            .Assembly.GetTypes()
+            .Where(t => t is { IsAbstract: false } && t.IsAssignableTo(typeof(HidProtocol)))
+            .Select(t => ((HidProtocol)Activator.CreateInstance(t, nonPublic: true)!).VendorId)
+            .Distinct()
+            .ToArray();
+
+        Assert.That(vendors, Is.Not.Empty);
+        Assert.That(
+            vendors.Where(v => !rule.Contains($"ATTRS{{idVendor}}==\"{v:x4}\"", StringComparison.Ordinal)),
+            Is.Empty
+        );
+    }
+}

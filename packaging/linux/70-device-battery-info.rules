@@ -1,0 +1,20 @@
+# Lets the user logged in at the seat open the hidraw nodes of the USB devices Device Battery Info reads.
+# The file name must sort before 73-seat-late.rules, which is where the uaccess tag is applied.
+#
+# Install:
+#   sudo cp 70-device-battery-info.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules && sudo udevadm trigger --subsystem-match=hidraw
+# then replug the device (or its receiver).
+
+# Razer
+SUBSYSTEM=="hidraw", KERNEL=="hidraw*", ATTRS{idVendor}=="1532", TAG+="uaccess"
+# Logitech
+SUBSYSTEM=="hidraw", KERNEL=="hidraw*", ATTRS{idVendor}=="046d", TAG+="uaccess"
+# Corsair
+SUBSYSTEM=="hidraw", KERNEL=="hidraw*", ATTRS{idVendor}=="1b1c", TAG+="uaccess"
+# Rapoo
+SUBSYSTEM=="hidraw", KERNEL=="hidraw*", ATTRS{idVendor}=="24ae", TAG+="uaccess"
+# AULA
+SUBSYSTEM=="hidraw", KERNEL=="hidraw*", ATTRS{idVendor}=="3554", TAG+="uaccess"
+# Sony
+SUBSYSTEM=="hidraw", KERNEL=="hidraw*", ATTRS{idVendor}=="054c", TAG+="uaccess"
