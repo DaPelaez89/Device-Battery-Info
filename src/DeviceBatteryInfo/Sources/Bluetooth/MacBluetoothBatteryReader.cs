@@ -4,16 +4,11 @@ namespace DeviceBatteryInfo.Sources.Bluetooth;
 
 internal sealed class MacBluetoothBatteryReader : IBluetoothBatteryReader, IDisposable
 {
-    private static readonly TimeSpan SnapshotLifetime = TimeSpan.FromSeconds(5);
-
     private readonly ILogger _logger;
     private readonly Func<CancellationToken, Task<string>> _runSystemProfiler;
     private readonly Func<CancellationToken, Task<string>> _runPmsetAccessories;
-    private readonly TimeProvider _time;
-    private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly BluetoothSnapshot _snapshot;
     private int _accessoriesFailed;
-    private IReadOnlyList<(string Name, string? RawBattery)>? _snapshot;
-    private long _snapshotTimestamp;
 
     public MacBluetoothBatteryReader(ILogger logger)
         : this(logger, RunSystemProfilerAsync, RunPmsetAccessoriesAsync) { }
@@ -28,47 +23,15 @@ internal sealed class MacBluetoothBatteryReader : IBluetoothBatteryReader, IDisp
         _logger = logger;
         _runSystemProfiler = runSystemProfiler;
         _runPmsetAccessories = runPmsetAccessories;
-        _time = timeProvider ?? TimeProvider.System;
+        _snapshot = new BluetoothSnapshot(FetchAsync, timeProvider);
     }
 
-    public async Task<string?> ReadRawAsync(
-        string friendlyName,
-        CancellationToken cancellationToken
-    )
-    {
-        var devices = await GetSnapshotAsync(cancellationToken);
-        return devices.FirstOrDefault(d => d.Name == friendlyName).RawBattery;
-    }
+    public Task<string?> ReadRawAsync(string friendlyName, CancellationToken cancellationToken) =>
+        _snapshot.ReadRawAsync(friendlyName, cancellationToken);
 
     public Task<IReadOnlyList<(string Name, string? RawBattery)>> ListDevicesAsync(
         CancellationToken cancellationToken
     ) => FetchAsync(cancellationToken);
-
-    private async Task<IReadOnlyList<(string Name, string? RawBattery)>> GetSnapshotAsync(
-        CancellationToken cancellationToken
-    )
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
-        {
-            if (
-                _snapshot is not null
-                && _time.GetElapsedTime(_snapshotTimestamp) < SnapshotLifetime
-            )
-            {
-                return _snapshot;
-            }
-
-            var fresh = await FetchAsync(cancellationToken);
-            _snapshot = fresh;
-            _snapshotTimestamp = _time.GetTimestamp();
-            return fresh;
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
 
     private async Task<IReadOnlyList<(string Name, string? RawBattery)>> FetchAsync(
         CancellationToken cancellationToken
@@ -109,7 +72,7 @@ internal sealed class MacBluetoothBatteryReader : IBluetoothBatteryReader, IDisp
         }
     }
 
-    public void Dispose() => _gate.Dispose();
+    public void Dispose() => _snapshot.Dispose();
 
     private static Task<string> RunSystemProfilerAsync(CancellationToken cancellationToken) =>
         ExternalProcess.RunAsync(
