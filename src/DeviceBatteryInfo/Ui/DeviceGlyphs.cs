@@ -4,8 +4,8 @@ using DeviceBatteryInfo.Core;
 
 namespace DeviceBatteryInfo.Ui;
 
-// Plugins ship no images. The renderer takes absolute M/L/H/V/A/Z only and fills nonzero, so a
-// cut-out winds counter-clockwise.
+// Plugins ship no images. The renderer takes absolute M/L/H/V/C/Q/A/Z (these glyphs need only
+// M/L/A/Z) and fills nonzero, so a cut-out winds counter-clockwise.
 internal static class DeviceGlyphs
 {
     private static readonly Dictionary<BatterySourceKind, string> Paths = new()

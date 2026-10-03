@@ -1,5 +1,6 @@
 using System.Text.Json;
 using DeviceBatteryInfo.Core;
+using MacroDeck.Localization;
 using MacroDeck.Ui.Components;
 using MacroDeck.Ui.Config;
 using MacroDeck.Ui.Config.Options;
@@ -39,7 +40,7 @@ internal static class BatteryWidgetConfigView
             flows.ValueKind == JsonValueKind.Array ? flows : EmptyFlows
         );
 
-        // The rings layout has no room for a caption, only a short trend line.
+        // Only the panel has a layout to depend on; the tile shows every field.
         UiValue<UiVisibleWhen> OnlyFor(string layoutValue) =>
             isPanel
                 ? UiValue.Of(
@@ -159,7 +160,10 @@ internal static class BatteryWidgetConfigView
                 Key = "colors",
                 Label = Strings.Widgets.Config.Colors.Label(),
                 Options = Options(
-                    (BatteryWidgetOptions.ColorsLevelsCharging, Strings.Widgets.Config.Colors.LevelsCharging()),
+                    (
+                        BatteryWidgetOptions.ColorsLevelsCharging,
+                        Strings.Widgets.Config.Colors.LevelsCharging()
+                    ),
                     (BatteryWidgetOptions.ColorsLevels, Strings.Widgets.Config.Colors.Levels()),
                     (BatteryWidgetOptions.ColorsSimple, Strings.Widgets.Config.Colors.Simple()),
                     (BatteryWidgetOptions.ColorsDevice, Strings.Widgets.Config.Colors.Device()),
@@ -187,6 +191,7 @@ internal static class BatteryWidgetConfigView
                 Toggle("showBar", Strings.Widgets.Config.ShowBar.Label(), showBar),
                 Toggle("showPercent", Strings.Widgets.Config.ShowPercent.Label(), showPercent),
                 Toggle("showCharging", Strings.Widgets.Config.ShowCharging.Label(), showCharging),
+                // A caption needs the list; the rings layout has room only for its own short trend line.
                 Toggle(
                     "showTimeToFull",
                     Strings.Widgets.Config.ShowTimeToFull.Label(),
@@ -293,7 +298,7 @@ internal static class BatteryWidgetConfigView
         };
 
     private static UiValue<IReadOnlyList<UiOption>> Options(
-        params (string Value, MacroDeck.Localization.LocalizedText Label)[] options
+        params (string Value, LocalizedText Label)[] options
     ) =>
         UiValue.Of<IReadOnlyList<UiOption>>(
             options.Select(o => UiOption.Of(o.Value) with { Label = o.Label }).ToArray()
@@ -301,7 +306,7 @@ internal static class BatteryWidgetConfigView
 
     private static UiOption IconOption(
         string value,
-        MacroDeck.Localization.LocalizedText label,
+        LocalizedText label,
         string icon
     ) => UiOption.Of(value) with { Label = label, Icon = icon };
 }

@@ -631,6 +631,7 @@ internal static class BatteryWidgetView
     private static UiStack TileStacked(BatteryWidgetRow row, BatteryWidgetOptions options)
     {
         var caption = Caption(row, options);
+        // Leaves room below the ring for the name line, and for the caption line when there is one.
         var diameter = 1 - (2 * EdgeInset) - 0.13 - (caption is null ? 0 : 0.1);
 
         var children = new List<UiElement>
@@ -705,7 +706,12 @@ internal static class BatteryWidgetView
 
         if (caption is { } captionText)
         {
-            details.Add(CaptionText(captionText, UiComponentAlignments.Start) with { Size = UiSize.FromBasis(0.1, 0.9) });
+            details.Add(
+                CaptionText(captionText, UiComponentAlignments.Start) with
+                {
+                    Size = UiSize.FromBasis(0.1, 0.9),
+                }
+            );
         }
 
         return new UiStack
@@ -780,7 +786,7 @@ internal static class BatteryWidgetView
             return Strings.Widgets.Caption.Full();
         }
 
-        // `? row.Trend : null` would turn a null string into a non-null caption.
+        // A null string converts to a non-null LocalizedText, so test the string before returning it.
         if (options.ShowTrend && !string.IsNullOrEmpty(row.Trend))
         {
             return row.Trend;
