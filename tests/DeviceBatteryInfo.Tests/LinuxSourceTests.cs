@@ -308,7 +308,8 @@ public sealed class LinuxUdevRuleTests
             var file = System.IO.Path.Combine([directory.FullName, .. parts]);
             if (File.Exists(file))
             {
-                return File.ReadAllText(file);
+                // A Windows checkout ends lines with CRLF, which would leave a '\r' on every split line.
+                return File.ReadAllText(file).ReplaceLineEndings("\n");
             }
         }
 
