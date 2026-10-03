@@ -10,61 +10,172 @@ internal static class BatteryWidgetSamples
     public static BatteryWidgetModel Panel() =>
         new(
             [
+                Row("phone", "Phone", 48, BatteryStatus.Discharging, BatterySourceKind.Phone),
+                Row(
+                    "earbuds",
+                    "Earbuds",
+                    2,
+                    BatteryStatus.Charging,
+                    BatterySourceKind.Earbuds,
+                    charging: true
+                ),
+                Row(
+                    "mouse",
+                    "Mouse",
+                    100,
+                    BatteryStatus.Charging,
+                    BatterySourceKind.Mouse,
+                    charging: true
+                ),
+                Row("headset", "Headset", 20, BatteryStatus.Discharging, BatterySourceKind.Headset),
+            ],
+            BatteryWidgetOptions.Default
+        );
+
+    public static BatteryWidgetModel PanelNamed() =>
+        new(
+            [
+                Row("laptop", "Laptop", 76, BatteryStatus.Discharging, BatterySourceKind.System),
+                Row("keyboard", "Keyboard", 58, BatteryStatus.Discharging, BatterySourceKind.Keyboard),
+                Row(
+                    "controller",
+                    "Controller",
+                    34,
+                    BatteryStatus.Charging,
+                    BatterySourceKind.Controller,
+                    charging: true
+                ),
+                Row("tablet", "Tablet", 100, BatteryStatus.Full, BatterySourceKind.Tablet),
+            ],
+            BatteryWidgetOptions.Default with
+            {
+                Title = "Batteries",
+                ShowNames = true,
+            }
+        );
+
+    public static BatteryWidgetModel PanelTrend() =>
+        new(
+            [
+                Row(
+                    "phone",
+                    "Phone",
+                    47,
+                    BatteryStatus.Discharging,
+                    BatterySourceKind.Phone,
+                    trend: "-13%/1h"
+                ),
                 Row(
                     "mouse",
                     "Mouse",
                     82,
                     BatteryStatus.Charging,
+                    BatterySourceKind.Mouse,
+                    charging: true,
+                    trend: "+28%/30m"
+                ),
+                Row("headset", "Headset", 100, BatteryStatus.Full, BatterySourceKind.Headset),
+                Row(
+                    "earbuds",
+                    "Earbuds",
+                    15,
+                    BatteryStatus.Discharging,
+                    BatterySourceKind.Earbuds,
+                    trend: "-9%/30m"
+                ),
+            ],
+            BatteryWidgetOptions.Default with
+            {
+                ShowNames = true,
+                ShowRingTrend = true,
+            }
+        );
+
+    public static BatteryWidgetModel PanelList() =>
+        new(
+            [
+                Row(
+                    "mouse",
+                    "Mouse",
+                    82,
+                    BatteryStatus.Charging,
+                    BatterySourceKind.Mouse,
                     charging: true,
                     timeToFull: "0:35"
                 ),
-                Row("phone", "Phone", 47, BatteryStatus.Discharging, trend: "-13%/1h"),
-                Row("headset", "Headset", 100, BatteryStatus.Full),
+                Row(
+                    "phone",
+                    "Phone",
+                    17,
+                    BatteryStatus.Discharging,
+                    BatterySourceKind.Phone,
+                    trend: "-13%/1h"
+                ),
+                Row(
+                    "keyboard",
+                    "Keyboard",
+                    64,
+                    BatteryStatus.Discharging,
+                    BatterySourceKind.Keyboard,
+                    stale: true
+                ),
+                Row("headset", "Headset", 100, BatteryStatus.Full, BatterySourceKind.Headset),
+            ],
+            BatteryWidgetOptions.Default with
+            {
+                Layout = BatteryWidgetLayout.List,
+            }
+        );
+
+    public static BatteryWidgetModel PanelListDevice() =>
+        new(
+            [
+                Row("laptop", "Laptop", 76, BatteryStatus.Discharging, BatterySourceKind.System),
+                Row(
+                    "controller",
+                    "Controller",
+                    34,
+                    BatteryStatus.Charging,
+                    BatterySourceKind.Controller,
+                    charging: true,
+                    timeToFull: "1:10"
+                ),
+                Row("pen", "Pen", 91, BatteryStatus.Discharging, BatterySourceKind.Pen),
+                Row("earbuds", "Earbuds", 8, BatteryStatus.Discharging, BatterySourceKind.Earbuds),
             ],
             BatteryWidgetOptions.Default with
             {
                 Title = "Batteries",
+                Layout = BatteryWidgetLayout.List,
+                Colors = BatteryColorScheme.Device,
+                ListAlign = BatteryListAlignment.Center,
+            }
+        );
+
+    public static BatteryWidgetModel PanelGradient() =>
+        new(
+            [
+                Row("mouse", "Mouse", 92, BatteryStatus.Discharging, BatterySourceKind.Mouse),
+                Row("keyboard", "Keyboard", 63, BatteryStatus.Discharging, BatterySourceKind.Keyboard),
+                Row("headset", "Headset", 38, BatteryStatus.Discharging, BatterySourceKind.Headset),
+                Row("controller", "Controller", 11, BatteryStatus.Discharging, BatterySourceKind.Controller),
+            ],
+            BatteryWidgetOptions.Default with
+            {
+                ShowNames = true,
+                Colors = BatteryColorScheme.Gradient,
             }
         );
 
     public static BatteryWidgetModel PanelLow() =>
         new(
             [
-                Row("mouse", "Mouse", 12, BatteryStatus.Discharging),
-                Row("keyboard", "Keyboard", 6, BatteryStatus.Discharging),
-                Row("phone", "Phone", 58, BatteryStatus.Discharging),
+                Row("mouse", "Mouse", 12, BatteryStatus.Discharging, BatterySourceKind.Mouse),
+                Row("keyboard", "Keyboard", 6, BatteryStatus.Discharging, BatterySourceKind.Keyboard),
+                Row("phone", "Phone", 58, BatteryStatus.Discharging, BatterySourceKind.Phone),
+                Row("pen", "Pen", 64, BatteryStatus.Discharging, BatterySourceKind.Pen, stale: true),
             ],
-            BatteryWidgetOptions.Default with
-            {
-                Title = "Batteries",
-            }
-        );
-
-    public static BatteryWidgetModel PanelCharging() =>
-        new(
-            [
-                Row(
-                    "phone",
-                    "Phone",
-                    54,
-                    BatteryStatus.Charging,
-                    charging: true,
-                    trend: "+28%/30m"
-                ),
-                Row(
-                    "mouse",
-                    "Mouse",
-                    91,
-                    BatteryStatus.Charging,
-                    charging: true,
-                    timeToFull: "0:12"
-                ),
-                Row("laptop", "Laptop", 100, BatteryStatus.Full),
-            ],
-            BatteryWidgetOptions.Default with
-            {
-                Title = "Charging",
-            }
+            BatteryWidgetOptions.Default
         );
 
     public static BatteryWidgetModel PanelEmpty() =>
@@ -72,23 +183,71 @@ internal static class BatteryWidgetSamples
 
     public static BatteryWidgetModel TileCharging() =>
         new(
-            [Row("mouse", "Mouse", 82, BatteryStatus.Charging, charging: true, timeToFull: "0:35")],
+            [
+                Row(
+                    "mouse",
+                    "Mouse",
+                    82,
+                    BatteryStatus.Charging,
+                    BatterySourceKind.Mouse,
+                    charging: true,
+                    timeToFull: "0:35"
+                ),
+            ],
             BatteryWidgetOptions.Default
         );
 
     public static BatteryWidgetModel TileDischarging() =>
-        new([Row("phone", "Phone", 47, BatteryStatus.Discharging)], BatteryWidgetOptions.Default);
+        new(
+            [
+                Row(
+                    "phone",
+                    "Phone",
+                    47,
+                    BatteryStatus.Discharging,
+                    BatterySourceKind.Phone,
+                    trend: "-13%/1h"
+                ),
+            ],
+            BatteryWidgetOptions.Default
+        );
 
     public static BatteryWidgetModel TileLow() =>
-        new([Row("mouse", "Mouse", 9, BatteryStatus.Discharging)], BatteryWidgetOptions.Default);
+        new(
+            [Row("headset", "Headset", 9, BatteryStatus.Discharging, BatterySourceKind.Headset)],
+            BatteryWidgetOptions.Default
+        );
+
+    public static BatteryWidgetModel TileFull() =>
+        new(
+            [Row("tablet", "Tablet", 100, BatteryStatus.Full, BatterySourceKind.Tablet)],
+            BatteryWidgetOptions.Default
+        );
+
+    public static BatteryWidgetModel TileNoSignal() =>
+        new(
+            [
+                Row(
+                    "controller",
+                    "Controller",
+                    54,
+                    BatteryStatus.Discharging,
+                    BatterySourceKind.Controller,
+                    stale: true
+                ),
+            ],
+            BatteryWidgetOptions.Default
+        );
 
     private static BatteryWidgetRow Row(
         string id,
         string name,
         int percent,
         BatteryStatus status,
+        BatterySourceKind kind,
         bool charging = false,
         string? timeToFull = null,
-        string? trend = null
-    ) => new(id, name, percent, status, charging, Stale: false, timeToFull, trend);
+        string? trend = null,
+        bool stale = false
+    ) => new(id, name, percent, status, charging, stale, timeToFull, trend, kind);
 }

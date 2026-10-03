@@ -38,7 +38,8 @@ src/DeviceBatteryInfo/
   Core/IDeviceDiscovery.cs public: lists present Bluetooth devices and attached Android phones for the
                            config-flow pickers (HID
                            enumeration is kept for a future "scan for supported devices" step)
-  Ui/                      widget rendering: BatteryWidgetView (deck tree), BatteryWidgetConfigView
+  Ui/                      widget rendering: BatteryWidgetView (deck tree), DeviceGlyphs (one vector
+                           icon per BatterySourceKind, plus the charging bolt), BatteryWidgetConfigView
                            (config form), UiViewSession (UiView -> IUiSession adapter),
                            BatteryWidgetModel, BatteryWidgetTypes (descriptors + JSON Schema),
                            BatteryWidgetSamples (fixed demo models shared by the widget "sample"
@@ -112,27 +113,70 @@ Design knowledge that is not obvious from the code alone:
   which conformance does not catch, so the `BatteryWidgetViewTests` build each tree through a real
   `UiView`. A widget `config` surface is served by this plugin's own `IUiProvider.CreateSessionAsync`
   (kind `"config"`, `entryPoint == "widget-config"`), not by the hosting config-flow path.
+  `BatteryWidgetConfigView` follows the host's own Action Button form: `UiTabs` (Devices, and Appearance
+  with the display switches under a "Show" heading) and `Segmented` choices whose `UiOption.Icon` names a `UiIcons` value for short icon choices.
+  The properties pane beside the actions editor is narrow (about 280 px): a switch in a row wraps its
+  label and stacks it above the switch, and one whose row partner is hidden jumps to the right, so every
+  switch gets its own line and only small segmented controls share a `UiConfigStack` row
+  (`Wrap = false`, `RowWeight = 1` each). Two segmented controls in one row must both be icon-only or
+  both text: the host pads a strip of icon-only options differently, so a mixed pair never lines up. Keep labels and option names short enough not to truncate at that width. Tabs and rows
+  only change rendering: the values stay in the session's `UiState`, and a field's node id stays its bare
+  key, which is what a `VisibleWhen` resolves against (only an object or array input starts a scope).
+  `BatteryWidgetViewTests` checks every condition names a field in the built tree.
   **Every `UiLength` is a fraction of the view basis, not a pixel** - a bar needs both `MainSize`
   (its box) and `Thickness` (its track), texts beside a `Fill` sibling need a `MainSize`, and
   `Padding` is the corner-radius safe area (`BatteryWidgetView.SafeArea`, radius from the
-  `cornerRadius` surface attribute). Plugins ship no images, so state is colour + a caption.
-  `BatteryWidgetView` sizes the way the host's own Weather widget does: small type, one restrained
-  emphasis per row (the percentage, semibold, in the device colour), `UiSize.FromBasis(fraction)` of
-  the basis with a `maxOfCross` only as a safety rail for a wide, short widget. An absolute pixel
-  ceiling freezes every size a hair above a 1x1 tile and flattens the hierarchy (title, name and
-  percent all render the same size), so size relative to the basis instead. Each `Row` hugs its
-  content (headline + bar tight together) and the `Fill` body centres the row list with a fixed
-  inter-row gap; making the row or its `headline` `Fill` opens slack between the text and its bar and
-  reads as top-aligned text, so keep them content-sized. The tile percentage is the one deliberately
-  large, bold reading (a tile is one device). A progress bar's `StartColor` and `EndColor` are always
-  the same hex - the renderer always paints a `linear-gradient`, and a two-colour battery bar just
-  muddies the reading.
-- **A widget press refreshes the batteries, and the host will not run user-bound flows for a plugin
-  widget.** `ExecuteActionButtonTriggerRequestMessageHandler` returns "nothing to do" for any widget whose
-  type is not built in, so an actions-list editor bound to `flows` saves fine and never fires. A tree that
-  declares a `press` event also owns the gesture (`treeClaimsGesture`), so the host skips the tile's own
-  triggers. `BatteryWidgetView.Build` therefore takes an optional `onPress`, passed only for a live widget
-  session (never for the sample or the previews), which calls `BatteryPollingService.RequestRefresh`.
+  `cornerRadius` surface attribute). Plugins ship no images: device icons are `UiShape` paths in
+  `DeviceGlyphs`, drawn in the unit square the renderer scales to the shape's box (so give the box a
+  square `UiFrame`), absolute `M L H V C Q A Z` only, filled nonzero - a solid part clockwise, a
+  cut-out counter-clockwise, and a cut-out never where two solid parts overlap (the winding sums to
+  1 there and it disappears). `BatteryWidgetViewTests` checks every path against the renderer's
+  grammar. A shape's `Color` takes a hex only, not a theme role, so glyphs and rings carry the state
+  colour (`BatteryWidgetRow.Color` for the widget's `colors` scheme, all Apple system colours so every
+  scheme has the same saturation; every scheme shows a level at or below the threshold in red even
+  while charging and a stale or unknown one in grey) and the percentage uses the primary text role. A ring is a full-turn `UiGauge`
+  inside a `UiModifier` with `Frame.AspectRatio = 1` and a `UiLayer` for the gauge, the bolt and the
+  face; the gauge is inset by half the bolt's height minus half its stroke, which puts a charging
+  bolt exactly in the gap the gauge leaves at the top (`StartAngle`/`EndAngle`, 0 is up, clockwise).
+  The face (glyph over percentage) must fit the gauge's inner circle, radius about 0.35 of the
+  diameter: the corners of the percentage line are what collide, so check them, not just the height.
+  Every `UiLength` is a fraction of the whole widget's basis, never of a grid cell, so the ring panel
+  estimates its ring diameter (`BatteryWidgetView.Arrange`: the column count that gives the largest
+  ring for the device count and aspect) and sizes each ring's parts reactively from that; a
+  `UiResponsive` picks the aspect bucket. The view builder rejects `Fill`/`MainSize` on a responsive
+  variant's root and on a modifier's child, and `BatteryWidgetViewTests` builds every layout through
+  a real `UiView` to catch that. The list layout sizes the way the host's own Weather widget does:
+  small type, `UiSize.FromBasis(fraction)` with a `maxOfCross` only as a safety rail; each row hugs
+  its content and the `Fill` body centres the rows. Next to a `Fill` sibling a text's measured width
+  is underestimated, so the list percentage has a fixed `MainSize`, sized to its own text so a
+  charging bolt sits beside the number; that width is estimated with `TextWidth` (four character
+  classes fitted to SF Pro Semibold, erring wide). The plugin never sees pixels or fonts, so wherever a
+  layout depends on whether text fits, let the reader measure with `UiFirstFit` (Macro Deck PR 1139)
+  instead of estimating.
+  The host's facts behind that, read from its renderer: the basis is `min(width, height)` of the
+  widget, a `UiResponsive` matches variants against the box its parent gives it (`MinAspect`, or
+  `MinWidth`/`MinHeight` in 120 px cells; min inclusive, max exclusive) and takes the **first** match,
+  so variants must not overlap (`Responsive_variants_never_overlap` checks every built tree), and a
+  text with `MinSize` shrinks toward it to fit its box
+  before it truncates. Texts in one row have no shrink priority, so a caption beside the name
+  truncates both when it does not fit: the list body is a `UiFirstFit` with the rows inline (caption
+  beside the name) first and stacked last. A shrunk text counts as fitting, so the inline layout's
+  name and caption have no `MinSize`. It switches the whole list, not each row, because an unsized
+  first-fit takes its last layout's size and every row would be as tall as a stacked one. A progress bar's `StartColor`
+  and `EndColor` are always the same hex - the renderer always paints a `linear-gradient`.
+- **A short press refreshes until the user sets their own Short Press action.** Both widget types set
+  `SupportsFlows` (Macro Deck PR 960), so the host runs the actions the user bound to the widget, like a
+  built-in one, and `DefaultShortPressAction` (PR 1111, host and SDK beta.15) names this plugin's own
+  `refresh` action (`RefreshBatteryAction.ActionId`). The host runs that default only while the
+  widget's Short Press flow is missing, empty or fully disabled, so the user's action always wins and
+  a Long Press flow works beside the default refresh. The tree must declare no `press` event: one owns
+  the gesture (`treeClaimsGesture`), and the host then skips both the flows and the default. A host
+  older than beta.15 ignores the default, so a press there does nothing. `SupportsFlows` alone shows no action editor:
+  the host runs the flows under the widget data's top-level `flows` key, so `BatteryWidgetConfigView`
+  serves a `UiActionsListEditor` bound to `flows` in the `UiWidgetConfiguration.Editor` region (seeded
+  from the stored data, and allowed by the `DataSchema`, whose `additionalProperties: false` would
+  otherwise reject it). Without an `Editor` region the desktop draws the properties as one full-width
+  pane, which looks stretched.
 - **Widget previews:** `Ui/BatteryWidgetPreviews.cs` has one `static` parameterless method per
   scenario, each `[UiPreview(name, View = nameof(BatteryWidgetView), Profile = UiPreviewProfiles.Widget)]`
   returning a `UiElement`. `UiPreviewCatalog.Scan` (run by the hosting `ui` capability over the
@@ -153,7 +197,10 @@ Design knowledge that is not obvious from the code alone:
   and `PercentPerHour` into a signed rate for automations. History is in-memory only and is lost on
   every plugin restart or update by design - it self-heals within `MinWindow`, which is simpler than
   persisting it under `MACRO_DECK_PLUGIN_DATA_DIRECTORY`. The widget caption falls back to the trend
-  text when there is no time-to-full to show (most sources never report one), and both the `trend`
+  text when there is no time-to-full to show (most sources never report one). The rings layout has no
+  caption; its own `showRingTrend` flag (default off) adds a muted trend line under each ring, below
+  the name, and `Arrange` reserves room for it. It is a separate key rather than `showTrend` because
+  released widgets already store `showTrend: true`, which would shrink every existing ring. Both the `trend`
   and `trend-rate` variable suffixes are public API like every other field suffix in
   `BatteryVariableCatalog`.
 - **Bluetooth battery data lives on a different PnP node than the one the user picks, and is only

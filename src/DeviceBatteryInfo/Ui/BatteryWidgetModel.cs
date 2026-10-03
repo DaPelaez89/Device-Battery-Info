@@ -1,3 +1,4 @@
+using System.Globalization;
 using DeviceBatteryInfo.Core;
 
 namespace DeviceBatteryInfo.Ui;
@@ -15,32 +16,125 @@ internal sealed record BatteryWidgetRow(
     bool Charging,
     bool Stale,
     string? TimeToFull,
-    string? Trend = null
+    string? Trend = null,
+    BatterySourceKind Kind = BatterySourceKind.Other
 )
 {
-    public string Color(int lowThreshold)
+    // Apple's system colours.
+    public const string Green = "#34C759";
+    public const string Yellow = "#FFCC00";
+    public const string Orange = "#FF9500";
+    public const string Red = "#FF3B30";
+    public const string Cyan = "#32ADE6";
+    public const string Grey = "#8E8E93";
+
+    private static readonly Dictionary<BatterySourceKind, string> KindColors = new()
     {
-        if (Stale || Percent is null)
+        [BatterySourceKind.System] = "#5856D6",
+        [BatterySourceKind.Phone] = "#007AFF",
+        [BatterySourceKind.Tablet] = Cyan,
+        [BatterySourceKind.Mouse] = "#AF52DE",
+        [BatterySourceKind.Keyboard] = Orange,
+        [BatterySourceKind.Headset] = "#FF2D55",
+        [BatterySourceKind.Earbuds] = "#00C7BE",
+        [BatterySourceKind.Controller] = Yellow,
+        [BatterySourceKind.Pen] = "#A2845E",
+        [BatterySourceKind.Other] = Green,
+    };
+
+    public string Color(
+        int lowThreshold,
+        BatteryColorScheme scheme = BatteryColorScheme.LevelsCharging
+    )
+    {
+        if (Stale || Percent is not { } percent)
         {
-            return "#8A8A8A";
+            return Grey;
         }
 
-        if (Charging)
+        if (percent <= lowThreshold)
         {
-            return "#A97BE0";
+            return Red;
         }
 
-        return Percent switch
+        return scheme switch
         {
-            <= 0 => "#8A8A8A",
-            var p when p <= lowThreshold => "#E5533D",
-            < 50 => "#E8A13C",
-            < 80 => "#3FB669",
-            _ => "#4C9BE8",
+            BatteryColorScheme.Simple => Green,
+            BatteryColorScheme.Levels => StepColor(percent),
+            BatteryColorScheme.Device => KindColors.GetValueOrDefault(Kind, Green),
+            BatteryColorScheme.Gradient => GradientColor(percent, lowThreshold),
+            _ => Charging ? Cyan : StepColor(percent),
         };
     }
 
+    private static string StepColor(int percent) =>
+        percent switch
+        {
+            <= 40 => Orange,
+            <= 60 => Yellow,
+            _ => Green,
+        };
+
+    // Red at the threshold to green at full.
+    private static string GradientColor(int percent, int lowThreshold)
+    {
+        var t = Math.Clamp(
+            (percent - lowThreshold) / (double)Math.Max(1, 100 - lowThreshold),
+            0,
+            1
+        );
+        return Hsv(4 + (131 * t), 0.78, 0.86);
+    }
+
+    private static string Hsv(double hue, double saturation, double value)
+    {
+        var chroma = value * saturation;
+        var x = chroma * (1 - Math.Abs((hue / 60 % 2) - 1));
+        var m = value - chroma;
+        var (r, g, b) = (hue / 60) switch
+        {
+            < 1 => (chroma, x, 0.0),
+            < 2 => (x, chroma, 0.0),
+            _ => (0.0, chroma, x),
+        };
+        return $"#{Channel(r + m)}{Channel(g + m)}{Channel(b + m)}";
+    }
+
+    private static string Channel(double value) =>
+        ((int)Math.Round(value * 255)).ToString("X2", CultureInfo.InvariantCulture);
+
+    public double Level => Percent is { } p ? Math.Clamp(p, 0, 100) / 100.0 : 0;
+
     public string PercentText() => Percent is { } p ? $"{p}%" : "--";
+}
+
+internal enum BatteryColorScheme
+{
+    LevelsCharging,
+
+    Levels,
+
+    Simple,
+
+    Device,
+
+    Gradient,
+}
+
+internal enum BatteryWidgetLayout
+{
+    Rings,
+
+    List,
+}
+
+internal enum BatteryListAlignment
+{
+    Top,
+
+    Center,
+
+    Bottom,
 }
 
 internal enum BatterySortMode
@@ -63,7 +157,12 @@ internal sealed record BatteryWidgetOptions(
     bool ShowTrend,
     int LowThreshold,
     BatterySortMode Sort = BatterySortMode.Manual,
-    string Title = ""
+    string Title = "",
+    BatteryWidgetLayout Layout = BatteryWidgetLayout.Rings,
+    bool ShowNames = false,
+    BatteryColorScheme Colors = BatteryColorScheme.LevelsCharging,
+    BatteryListAlignment ListAlign = BatteryListAlignment.Top,
+    bool ShowRingTrend = false
 )
 {
     public static readonly BatteryWidgetOptions Default = new(
@@ -80,6 +179,61 @@ internal sealed record BatteryWidgetOptions(
     public const string SortLowestFirst = "lowest-first";
     public const string SortAlphabetical = "alphabetical";
     public const string SortChargingFirst = "charging-first";
+
+    public const string LayoutRings = "rings";
+    public const string LayoutList = "list";
+
+    public static BatteryWidgetLayout ParseLayout(string? value) =>
+        value == LayoutList ? BatteryWidgetLayout.List : BatteryWidgetLayout.Rings;
+
+    public static string LayoutValue(BatteryWidgetLayout layout) =>
+        layout == BatteryWidgetLayout.List ? LayoutList : LayoutRings;
+
+    public const string ListAlignTop = "top";
+    public const string ListAlignCenter = "center";
+    public const string ListAlignBottom = "bottom";
+
+    public static BatteryListAlignment ParseListAlign(string? value) =>
+        value switch
+        {
+            ListAlignCenter => BatteryListAlignment.Center,
+            ListAlignBottom => BatteryListAlignment.Bottom,
+            _ => BatteryListAlignment.Top,
+        };
+
+    public static string ListAlignValue(BatteryListAlignment align) =>
+        align switch
+        {
+            BatteryListAlignment.Center => ListAlignCenter,
+            BatteryListAlignment.Bottom => ListAlignBottom,
+            _ => ListAlignTop,
+        };
+
+    public const string ColorsLevelsCharging = "levels-charging";
+    public const string ColorsLevels = "levels";
+    public const string ColorsSimple = "simple";
+    public const string ColorsDevice = "device";
+    public const string ColorsGradient = "gradient";
+
+    public static BatteryColorScheme ParseColors(string? value) =>
+        value switch
+        {
+            ColorsLevels => BatteryColorScheme.Levels,
+            ColorsSimple => BatteryColorScheme.Simple,
+            ColorsDevice => BatteryColorScheme.Device,
+            ColorsGradient => BatteryColorScheme.Gradient,
+            _ => BatteryColorScheme.LevelsCharging,
+        };
+
+    public static string ColorsValue(BatteryColorScheme scheme) =>
+        scheme switch
+        {
+            BatteryColorScheme.Levels => ColorsLevels,
+            BatteryColorScheme.Simple => ColorsSimple,
+            BatteryColorScheme.Device => ColorsDevice,
+            BatteryColorScheme.Gradient => ColorsGradient,
+            _ => ColorsLevelsCharging,
+        };
 
     public static BatterySortMode ParseSort(string? value) =>
         value switch

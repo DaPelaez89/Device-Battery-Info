@@ -18,10 +18,18 @@ peripherals, right on your deck.
 ## Features
 
 **Two deck widgets**, each with a config form to choose which devices it shows and what it displays
-(level bar, percentage, charging indicator, time to full, battery trend, low-battery threshold):
+(level ring or bar, percentage, charging indicator, time to full, battery trend, low-battery threshold).
+Each device is drawn with an icon for its kind and a coloured ring, with a bolt in the ring's gap while it
+charges. The colour scheme is a widget setting: by level with cyan while charging (the default), by
+level only, green only, by device type, or a smooth gradient. In every scheme a level at or below the
+low-battery threshold is red, even while charging:
 
-- **Battery panel** shows several devices at once.
-- **Battery tile** shows a single device. Pressing a widget refreshes the levels immediately.
+- **Battery panel** shows several devices at once, as a grid of rings that arranges itself to the
+  widget's size (optionally with names), or as a list of rows with bars aligned to the top, centre or
+  bottom.
+- **Battery tile** shows a single device as one large ring, with name, level and state beside it on a
+  wide tile. A short press refreshes the levels unless you give the widget a Short Press action of
+  your own; actions on other triggers (such as a long press) run alongside it like on any other widget.
 
 Widgets update live between polls. The battery trend is shown as a signed change over the window it
 covers, for example `-13%/1h` while discharging or `+28%/30m` while charging. It needs a couple of
@@ -152,7 +160,9 @@ Build and tests need no Macro Deck installation.
 The [Makefile](Makefile) wraps the everyday commands (`make` lists them): `make run` / `make watch`
 launch the plugin against the running Macro Deck through `macrodeck-plugin run` (pairing once, the
 credential kept in `src/DeviceBatteryInfo/.macrodeck-dev-state/`), `make stub` against a stub host,
-`make cli` keeps the CLI at the SDK's version, `make pack` builds and inspects the artifact, and
+`make preview` renders the widget previews to PNGs in `artifacts/previews/` (the store images),
+`make cli` keeps the CLI at the SDK's version, `make pack` builds and inspects the artifact for this
+machine's platform (`win-x64` on Windows, `osx-arm64` otherwise; the release workflow builds both), and
 `make release VERSION=x.y.z` tests and packs, bumps `manifest.json`, commits, tags `vx.y.z` and pushes -
 the tag starts the release workflow. On Windows it needs GNU make and Git Bash's `sh` on `PATH`.
 
