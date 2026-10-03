@@ -9,7 +9,9 @@ internal sealed class RefreshBatteryAction(BatteryPollingService polling) : IAct
 {
     private readonly BatteryPollingService _polling = polling;
 
-    public string Id => "refresh";
+    public const string ActionId = "refresh";
+
+    public string Id => ActionId;
 
     public LocalizedText Name => Strings.Actions.Refresh.Name();
 

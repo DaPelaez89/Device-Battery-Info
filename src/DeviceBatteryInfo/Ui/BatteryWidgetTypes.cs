@@ -1,4 +1,5 @@
 using System.Text.Json;
+using DeviceBatteryInfo.Actions;
 using MacroDeck.Sdk.Widgets;
 
 namespace DeviceBatteryInfo.Ui;
@@ -24,6 +25,7 @@ internal static class BatteryWidgetTypes
             )
             {
                 SupportsFlows = true,
+                DefaultShortPressAction = RefreshOnPress,
             },
             new WidgetTypeDescriptor(
                 TileId,
@@ -35,43 +37,18 @@ internal static class BatteryWidgetTypes
             )
             {
                 SupportsFlows = true,
+                DefaultShortPressAction = RefreshOnPress,
             },
         ];
+
+    // Runs until the user gives the widget a Short Press action of their own; their action wins.
+    private static readonly WidgetDefaultAction RefreshOnPress = new(RefreshBatteryAction.ActionId);
 
     public static JsonElement StoredFlows(JsonElement? data) =>
         data is { ValueKind: JsonValueKind.Object } stored
         && stored.TryGetProperty("flows", out var flows)
             ? flows
             : default;
-
-    // Mirrors the host's hasRunnableFlow: an onEvent flow never runs on a press, and a flow whose
-    // actions are all disabled runs nothing.
-    public static bool HasPressFlows(JsonElement? data)
-    {
-        var flows = StoredFlows(data);
-        return flows.ValueKind == JsonValueKind.Array
-            && flows.EnumerateArray().Any(flow => !IsEventFlow(flow) && HasEnabledAction(flow));
-    }
-
-    private static bool IsEventFlow(JsonElement flow) =>
-        flow.ValueKind == JsonValueKind.Object
-        && flow.TryGetProperty("triggerType", out var trigger)
-        && trigger.ValueKind == JsonValueKind.String
-        && string.Equals(trigger.GetString(), "onEvent", StringComparison.OrdinalIgnoreCase);
-
-    private static bool HasEnabledAction(JsonElement flow) =>
-        flow.ValueKind == JsonValueKind.Object
-        && flow.TryGetProperty("children", out var children)
-        && children.ValueKind == JsonValueKind.Array
-        && children
-            .EnumerateArray()
-            .Any(block =>
-                block.ValueKind == JsonValueKind.Object
-                && !(
-                    block.TryGetProperty("disabled", out var disabled)
-                    && disabled.ValueKind == JsonValueKind.True
-                )
-            );
 
     private const string DefaultData =
         """{"sourceIds":[],"showBar":true,"showPercent":true,"showCharging":true,"showTimeToFull":true,"showTrend":true,"lowThreshold":20,"sort":"manual","title":"","layout":"rings","showNames":false,"colors":"levels-charging","listAlign":"top","showRingTrend":false}""";

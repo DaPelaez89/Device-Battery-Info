@@ -28,8 +28,8 @@ low-battery threshold is red, even while charging:
   widget's size (optionally with names), or as a list of rows with bars aligned to the top, centre or
   bottom.
 - **Battery tile** shows a single device as one large ring, with name, level and state beside it on a
-  wide tile. Pressing a widget refreshes the levels until you assign actions to it; from then on it
-  runs your actions like any other widget (add the "Refresh battery levels" action to keep refreshing).
+  wide tile. A short press refreshes the levels unless you give the widget a Short Press action of
+  your own; actions on other triggers (such as a long press) run alongside it like on any other widget.
 
 Widgets update live between polls. The battery trend is shown as a signed change over the window it
 covers, for example `-13%/1h` while discharging or `+28%/30m` while charging. It needs a couple of

@@ -41,27 +41,16 @@ internal static class BatteryWidgetView
         (3.6, null, 4.4),
     ];
 
-    // A press event claims the gesture and the host then skips the widget's flows, so pass onPress
-    // only while the widget has none.
+    // The tree declares no press event: one would claim the gesture, and the host would then skip the
+    // widget's flows and its default refresh action.
     public static UiElement Build(
         string widgetLocalId,
         UiState<BatteryWidgetModel> state,
-        int cornerRadius,
-        Action? onPress = null
-    )
-    {
-        UiStack root =
-            widgetLocalId == BatteryWidgetTypes.TileId
-                ? Tile(state, cornerRadius)
-                : Panel(state, cornerRadius);
-
-        return onPress is null
-            ? root
-            : root with
-            {
-                Events = [UiEventHandler.On(UiComponentEvents.Press, onPress)],
-            };
-    }
+        int cornerRadius
+    ) =>
+        widgetLocalId == BatteryWidgetTypes.TileId
+            ? Tile(state, cornerRadius)
+            : Panel(state, cornerRadius);
 
     private static UiSize SafeArea(int cornerRadius)
     {

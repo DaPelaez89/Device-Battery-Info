@@ -164,22 +164,19 @@ Design knowledge that is not obvious from the code alone:
   name and caption have no `MinSize`. It switches the whole list, not each row, because an unsized
   first-fit takes its last layout's size and every row would be as tall as a stacked one. A progress bar's `StartColor`
   and `EndColor` are always the same hex - the renderer always paints a `linear-gradient`.
-- **A widget press refreshes until the user binds flows.** Both widget types set `SupportsFlows`
-  (Macro Deck PR 960), so the host runs the actions the user bound to the widget, like a built-in one.
-  A tree that declares a `press` event owns the gesture (`treeClaimsGesture`) and the host then skips
-  every flow, so `CreateWidgetSession` passes `BatteryWidgetView.Build` the refresh as `onPress` only
-  while `BatteryWidgetTypes.HasPressFlows` is false (no enabled action on a non-`onEvent` trigger,
-  mirroring the host's `hasRunnableFlow`). Saving flows changes the widget data, which makes the host
-  reopen the session, so the tree drops the press as soon as the user binds an action; to keep
-  refreshing they add "Refresh battery levels" to their flow. The press and flows cannot be mixed
-  (a tap refresh plus a long-press flow is impossible). `SupportsFlows` alone shows no action editor:
+- **A short press refreshes until the user sets their own Short Press action.** Both widget types set
+  `SupportsFlows` (Macro Deck PR 960), so the host runs the actions the user bound to the widget, like a
+  built-in one, and `DefaultShortPressAction` (PR 1111, host and SDK beta.15) names this plugin's own
+  `refresh` action (`RefreshBatteryAction.ActionId`). The host runs that default only while the
+  widget's Short Press flow is missing, empty or fully disabled, so the user's action always wins and
+  a Long Press flow works beside the default refresh. The tree must declare no `press` event: one owns
+  the gesture (`treeClaimsGesture`), and the host then skips both the flows and the default. A host
+  older than beta.15 ignores the default, so a press there does nothing. `SupportsFlows` alone shows no action editor:
   the host runs the flows under the widget data's top-level `flows` key, so `BatteryWidgetConfigView`
   serves a `UiActionsListEditor` bound to `flows` in the `UiWidgetConfiguration.Editor` region (seeded
   from the stored data, and allowed by the `DataSchema`, whose `additionalProperties: false` would
   otherwise reject it). Without an `Editor` region the desktop draws the properties as one full-width
-  pane, which looks stretched. Once a host with PR 1111 ships (beta.15), a widget type can declare a
-  default Short Press action that runs until the user sets their own; that replaces this conditional
-  press with the same behaviour.
+  pane, which looks stretched.
 - **Widget previews:** `Ui/BatteryWidgetPreviews.cs` has one `static` parameterless method per
   scenario, each `[UiPreview(name, View = nameof(BatteryWidgetView), Profile = UiPreviewProfiles.Widget)]`
   returning a `UiElement`. `UiPreviewCatalog.Scan` (run by the hosting `ui` capability over the

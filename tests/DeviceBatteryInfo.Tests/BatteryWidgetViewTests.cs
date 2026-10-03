@@ -1,4 +1,5 @@
 using System.Text.Json;
+using DeviceBatteryInfo.Actions;
 using DeviceBatteryInfo.Core;
 using DeviceBatteryInfo.Ui;
 using MacroDeck.Ui.Model.Events;
@@ -50,9 +51,7 @@ public sealed class BatteryWidgetViewTests
 
     [TestCase(BatteryWidgetTypes.PanelId)]
     [TestCase(BatteryWidgetTypes.TileId)]
-    public void Without_a_press_handler_the_tree_declares_no_events_so_presses_run_the_flows(
-        string widgetId
-    )
+    public void The_tree_declares_no_events_so_presses_reach_the_host(string widgetId)
     {
         var state = new UiState<BatteryWidgetModel>(
             new BatteryWidgetModel([Row(72)], BatteryWidgetOptions.Default)
@@ -62,54 +61,13 @@ public sealed class BatteryWidgetViewTests
         Assert.That(JsonSerializer.Serialize(view.Tree), Does.Not.Contain("\"events\""));
     }
 
-    [TestCase(BatteryWidgetTypes.PanelId, "battery-panel")]
-    [TestCase(BatteryWidgetTypes.TileId, "battery-tile")]
-    public void Pressing_the_widget_runs_the_press_callback(string widgetId, string rootId)
-    {
-        var presses = 0;
-        var state = new UiState<BatteryWidgetModel>(
-            new BatteryWidgetModel([Row(72)], BatteryWidgetOptions.Default)
-        );
-        var view = new UiView(
-            WidgetSurface(),
-            BatteryWidgetView.Build(widgetId, state, 16, () => presses++)
-        );
-
-        var result = view.Dispatch(new UiEvent { NodeId = rootId, Name = "press" });
-
-        Assert.That(result.IsAccepted, Is.True);
-        Assert.That(presses, Is.EqualTo(1));
-    }
-
-    [TestCase("""{}""", ExpectedResult = false)]
-    [TestCase("""{"flows":[]}""", ExpectedResult = false)]
-    [TestCase(
-        """{"flows":[{"triggerType":"onShortPress","children":[]}]}""",
-        ExpectedResult = false
-    )]
-    [TestCase(
-        """{"flows":[{"triggerType":"onShortPress","children":[{"disabled":true}]}]}""",
-        ExpectedResult = false
-    )]
-    [TestCase(
-        """{"flows":[{"triggerType":"onEvent","children":[{"actionId":"x"}]}]}""",
-        ExpectedResult = false
-    )]
-    [TestCase(
-        """{"flows":[{"triggerType":"onShortPress","children":[{"actionId":"x"}]}]}""",
-        ExpectedResult = true
-    )]
-    [TestCase(
-        """{"flows":[{"triggerType":"onLongPress","children":[{"actionId":"x"}]}]}""",
-        ExpectedResult = true
-    )]
-    public bool Only_an_enabled_action_on_a_press_trigger_counts_as_a_press_flow(string data) =>
-        BatteryWidgetTypes.HasPressFlows(JsonDocument.Parse(data).RootElement);
-
     [Test]
-    public void Missing_widget_data_has_no_press_flows()
+    public void Every_widget_type_refreshes_on_a_short_press_by_default()
     {
-        Assert.That(BatteryWidgetTypes.HasPressFlows(null), Is.False);
+        Assert.That(
+            BatteryWidgetTypes.All.Select(t => t.DefaultShortPressAction?.ActionId),
+            Is.All.EqualTo(RefreshBatteryAction.ActionId)
+        );
     }
 
     [Test]

@@ -108,16 +108,7 @@ public sealed partial class BatteryIntegration : IWidgetTypeProvider, IUiProvide
         );
 
         var state = new UiState<BatteryWidgetModel>(initial);
-        // Saving flows reopens the session, so the refresh stays the press only until the user binds one.
-        var view = new UiView(
-            surface,
-            BatteryWidgetView.Build(
-                localId,
-                state,
-                cornerRadius,
-                BatteryWidgetTypes.HasPressFlows(data) ? null : _polling.RequestRefresh
-            )
-        );
+        var view = new UiView(surface, BatteryWidgetView.Build(localId, state, cornerRadius));
 
         void Refresh() => state.Set(Compute());
         void OnRegistryChanged(object? sender, BatterySnapshotChangedEventArgs e) => Refresh();
