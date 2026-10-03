@@ -103,7 +103,7 @@ public sealed class BatteryRegistry(TimeProvider time)
     private sealed record Entry(BatterySnapshot Snapshot, int ConsecutiveFailures);
 }
 
-// Current is null when the source was removed
+// Current is null when the source was removed.
 public sealed class BatterySnapshotChangedEventArgs(
     BatterySnapshot? previous,
     BatterySnapshot? current

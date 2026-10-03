@@ -417,9 +417,8 @@ internal static class BatteryWidgetView
     private const double CaptionSize = 0.058;
     private const double PercentSize = 0.09;
 
-    // The reader measures in the viewer's font and draws the inline rows unless a name or caption
-    // would be cut off. Texts in a row have no shrink priority, and an unsized first-fit would take
-    // the stacked layout's height, so the whole list switches at once.
+    // The reader draws the inline rows unless a name or caption would be cut off in the viewer's font. Texts
+    // have no shrink priority and an unsized first-fit takes the stacked height, so the whole list switches.
     private static UiFirstFit ListBody(UiState<BatteryWidgetModel> state) =>
         new()
         {

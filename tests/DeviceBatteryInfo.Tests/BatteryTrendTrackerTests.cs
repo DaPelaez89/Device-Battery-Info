@@ -96,7 +96,7 @@ public sealed class BatteryTrendTrackerTests
         time.Advance(TimeSpan.FromMinutes(10));
         registry.Update(source, BatteryReading.FromPercent(45, BatteryStatus.Discharging));
 
-        // Charging starts: the discharging history must not leak into the charging rate
+        // Charging starts, so the discharging history must not leak into the charging rate.
         registry.Update(source, BatteryReading.FromPercent(45, BatteryStatus.Charging));
         time.Advance(TimeSpan.FromMinutes(1));
         registry.Update(source, BatteryReading.FromPercent(50, BatteryStatus.Charging));
@@ -117,7 +117,7 @@ public sealed class BatteryTrendTrackerTests
         registry.Update(source, BatteryReading.FromPercent(80, BatteryStatus.Discharging));
 
         // Going stale and recovering fires Changed without the percent moving; the oldest sample
-        // used for the window must still be the very first reading, not this one
+        // used for the window must still be the very first reading, not this one.
         time.Advance(TimeSpan.FromMinutes(30));
         registry.RecordFailure(source, staleAfter: 1);
 

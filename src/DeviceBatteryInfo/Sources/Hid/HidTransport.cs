@@ -20,8 +20,8 @@ internal sealed record HidCandidate(
     IReadOnlyList<(int Page, int Usage)>? Usages = null
 )
 {
-    // macOS presents one device per interface with every top-level collection inside it, while Windows
-    // presents one device per collection, so the first usage alone is not enough to find a vendor collection.
+    // macOS and Linux present one device per interface with every top-level collection inside it, Windows one
+    // per collection, so the first usage alone is not enough to find a vendor collection.
     public bool HasUsage(int? page, int? usage) =>
         Usages is { } all ? all.Contains((page ?? -1, usage ?? -1)) : UsagePage == page && Usage == usage;
 
@@ -83,7 +83,7 @@ internal sealed partial class HidSharpTransport : IHidTransport
     public HidSharpTransport(ILogger logger)
         : this(logger, OpenPlatformChannel, boundBlockingOpen: !OperatingSystem.IsWindows()) { }
 
-    // HidSharp retries a refused open for about a second on macOS, so there the whole exchange is
+    // HidSharp retries a refused open for about a second on macOS, so off Windows the whole exchange is
     // bounded by its budget instead of blocking the poll.
     internal HidSharpTransport(
         ILogger logger,
