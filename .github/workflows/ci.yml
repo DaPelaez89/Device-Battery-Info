@@ -8,12 +8,12 @@ on:
 
 jobs:
   build-and-test:
-    # The Windows and macOS sources differ (Win32 power status and PowerShell PnP versus pmset and
-    # system_profiler), so both platforms build and run the tests.
+    # The Windows, macOS and Linux sources differ (Win32 power status and PowerShell PnP, pmset and
+    # system_profiler, sysfs and BlueZ), so every platform builds and runs the tests.
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [windows-latest, macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
