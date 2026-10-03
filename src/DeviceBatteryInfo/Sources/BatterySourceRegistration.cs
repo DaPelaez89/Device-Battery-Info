@@ -13,6 +13,7 @@ internal static class BatterySourceRegistration
     public static IServiceCollection AddBatterySources(this IServiceCollection services)
     {
         services.AddSingleton<IHidTransport, HidSharpTransport>();
+        services.AddSingleton<DeviceAccessProblems>();
         services.AddSingleton<IDeviceDiscovery, SystemDeviceDiscovery>();
 
         if (OperatingSystem.IsMacOS())

@@ -321,4 +321,22 @@
     <data name="ConfigFlow.Device.BluetoothKind.Label" xml:space="preserve">
         <value>Kind</value>
     </data>
+    <data name="Issues.LinuxDeviceAccess.Title" xml:space="preserve">
+        <value>Linux needs a one-time permission to read a device</value>
+    </data>
+    <data name="Issues.LinuxDeviceAccess.Description" xml:space="preserve">
+        <value>Connected, but Linux lets only root open it, so the battery cannot be read: {devices}. A one-time udev rule from the Linux setup guide fixes this; then unplug and replug the device.</value>
+    </data>
+    <data name="Issues.LinuxDeviceAccess.Action" xml:space="preserve">
+        <value>Open setup guide</value>
+    </data>
+    <data name="Issues.LinuxDeviceAccess.Opened" xml:space="preserve">
+        <value>The Linux setup guide opened in your browser. This problem disappears once the device can be read.</value>
+    </data>
+    <data name="Issues.LinuxDeviceAccess.OpenFailed" xml:space="preserve">
+        <value>Your browser could not be opened. The Linux setup guide is at {url}</value>
+    </data>
+    <data name="Issues.Unknown" xml:space="preserve">
+        <value>This problem is no longer known to the plugin.</value>
+    </data>
 </root>

@@ -73,6 +73,7 @@ public sealed class CatalogNotificationTests
             catalog,
             TestModels.Catalog(),
             new NoDiscovery(),
+            new DeviceAccessProblems(),
             Serilog.Core.Logger.None
         );
     }

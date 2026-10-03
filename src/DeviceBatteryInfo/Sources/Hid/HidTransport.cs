@@ -24,6 +24,10 @@ internal sealed record HidCandidate(
     // presents one device per collection, so the first usage alone is not enough to find a vendor collection.
     public bool HasUsage(int? page, int? usage) =>
         Usages is { } all ? all.Contains((page ?? -1, usage ?? -1)) : UsagePage == page && Usage == usage;
+
+    // Every HID interface has at least one report, so no length at all means it could not be opened: on Linux
+    // a hidraw node without the udev rule, which would otherwise look exactly like an absent device.
+    public bool CouldNotOpen => FeatureReportLength == 0 && InputReportLength == 0 && OutputReportLength == 0;
 }
 
 // Plumbing only: a protocol owns its report layout and passes finished request bytes in.
@@ -117,7 +121,7 @@ internal sealed partial class HidSharpTransport : IHidTransport
         DeviceList
             .Local.GetHidDevices(vendorId, productId)
             .Select(d => Describe(d, withUsage: true))
-            .Where(c => c.FeatureReportLength >= minFeatureReportLength)
+            .Where(c => c.CouldNotOpen || c.FeatureReportLength >= minFeatureReportLength)
             .Where(c => interfaceNumber is null || c.InterfaceNumber == interfaceNumber)
             // Which HID collection answers varies by model, so try them in ascending order and let the caller's
             // probe decide.
