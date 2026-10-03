@@ -93,15 +93,20 @@ internal sealed partial class HidSharpTransport : IHidTransport
     }
 
     private static IFeatureChannel OpenPlatformChannel(string devicePath) =>
-        OperatingSystem.IsWindows()
-            ? new NativeFeatureChannel(NativeHid.Open(devicePath))
-            : new HidSharpFeatureChannel(devicePath);
+        OperatingSystem.IsWindows() ? new NativeFeatureChannel(NativeHid.Open(devicePath))
+        : OperatingSystem.IsLinux() ? new LinuxFeatureChannel(LinuxHidraw.Open(devicePath))
+        : new HidSharpFeatureChannel(devicePath);
 
     [GeneratedRegex(
         @"mi_(?<n>[0-9a-fA-F]{1,2})|IOUSBHostInterface@(?<n>[0-9a-fA-F]+)",
         RegexOptions.IgnoreCase
     )]
     private static partial Regex InterfacePattern();
+
+    // Linux paths are sysfs paths through the USB interface node, "<port>:<config>.<interface>" in decimal,
+    // e.g. /sys/devices/.../usb1/1-5/1-5.3/1-5.3:1.1/0003:1532:00B7.0002/hidraw/hidraw1.
+    [GeneratedRegex(@"^(?<unit>/sys/devices/.*)/\d+-[\d.]+:\d+\.(?<n>\d+)/")]
+    internal static partial Regex LinuxUsbInterfacePattern();
 
     public IReadOnlyList<HidCandidate> FindCandidates(
         int vendorId,
@@ -392,6 +397,12 @@ internal sealed partial class HidSharpTransport : IHidTransport
 
     internal static int? ParseInterfaceNumber(string devicePath)
     {
+        var linux = LinuxUsbInterfacePattern().Match(devicePath);
+        if (linux.Success)
+        {
+            return int.Parse(linux.Groups["n"].Value, System.Globalization.CultureInfo.InvariantCulture);
+        }
+
         var match = InterfacePattern().Match(devicePath);
         return match.Success
             ? int.Parse(match.Groups["n"].Value, System.Globalization.NumberStyles.HexNumber, null)

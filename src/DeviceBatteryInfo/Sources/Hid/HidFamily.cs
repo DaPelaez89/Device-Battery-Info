@@ -126,6 +126,12 @@ internal sealed class HidFamily(
             return "m:" + candidate.Path[..interfaceNode].ToLowerInvariant();
         }
 
+        var linux = HidSharpTransport.LinuxUsbInterfacePattern().Match(candidate.Path);
+        if (linux.Success)
+        {
+            return "l:" + linux.Groups["unit"].Value;
+        }
+
         var parts = candidate.Path.Split('#');
         if (parts.Length >= 4)
         {

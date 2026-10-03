@@ -22,6 +22,16 @@ internal sealed class NativeFeatureChannel(SafeFileHandle handle) : IFeatureChan
     public void Dispose() => handle.Dispose();
 }
 
+[SupportedOSPlatform("linux")]
+internal sealed class LinuxFeatureChannel(SafeFileHandle handle) : IFeatureChannel
+{
+    public void Set(byte[] report) => LinuxHidraw.SetFeature(handle, report);
+
+    public void Get(byte[] report) => LinuxHidraw.GetFeature(handle, report);
+
+    public void Dispose() => handle.Dispose();
+}
+
 internal sealed class HidSharpFeatureChannel : IFeatureChannel
 {
     private readonly HidStream _stream;

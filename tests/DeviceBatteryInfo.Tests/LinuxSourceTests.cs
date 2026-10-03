@@ -1,5 +1,6 @@
 using DeviceBatteryInfo.Core;
 using DeviceBatteryInfo.Sources.Bluetooth;
+using DeviceBatteryInfo.Sources.Hid;
 using DeviceBatteryInfo.Sources.SystemBattery;
 using NUnit.Framework;
 
@@ -220,6 +221,75 @@ public sealed class BlueZDeviceParserTests
         {
             Assert.That(calls, Is.EqualTo(1));
             Assert.That(results, Is.All.EqualTo("70"));
+        }
+    }
+}
+
+[TestFixture]
+public sealed class LinuxHidPathTests
+{
+    private const string Path =
+        "/sys/devices/pci0000:00/0000:00:14.0/usb1/1-5/1-5.3/1-5.3:1.{n}/0003:1532:00B7.0002/hidraw/hidraw1";
+
+    private static HidCandidate Candidate(string path, string? serial) =>
+        new(path, 0x1532, 0x00B7, null, "Mouse", 91, serial);
+
+    [Test]
+    public void Reads_the_interface_number_from_a_sysfs_path()
+    {
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(HidSharpTransport.ParseInterfaceNumber(Path.Replace("{n}", "0")), Is.EqualTo(0));
+            Assert.That(HidSharpTransport.ParseInterfaceNumber(Path.Replace("{n}", "2")), Is.EqualTo(2));
+            Assert.That(HidSharpTransport.ParseInterfaceNumber(Path.Replace("{n}", "10")), Is.EqualTo(10));
+        }
+    }
+
+    [Test]
+    public void The_feature_ioctls_carry_the_report_length()
+    {
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(LinuxHidraw.Request(0x06, 91), Is.EqualTo((nuint)0xC05B4806));
+            Assert.That(LinuxHidraw.Request(0x07, 91), Is.EqualTo((nuint)0xC05B4807));
+        }
+    }
+
+    [Test]
+    public void The_hidraw_node_comes_from_the_end_of_the_sysfs_path()
+    {
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(LinuxHidraw.DeviceNode(Path.Replace("{n}", "0")), Is.EqualTo("/dev/hidraw1"));
+            Assert.Throws<InvalidOperationException>(() => LinuxHidraw.DeviceNode("/sys/devices/x/input0"));
+        }
+    }
+
+    [Test]
+    public void A_bluetooth_hid_device_has_no_interface_number()
+    {
+        Assert.That(
+            HidSharpTransport.ParseInterfaceNumber(
+                "/sys/devices/virtual/misc/uhid/0005:046D:B023.0007/hidraw/hidraw6"
+            ),
+            Is.Null
+        );
+    }
+
+    [Test]
+    public void Interfaces_of_one_unit_share_a_key_and_a_second_port_does_not()
+    {
+        var unitA0 = HidFamily.PhysicalUnitKey(Candidate(Path.Replace("{n}", "0"), "000000000000"));
+        var unitA2 = HidFamily.PhysicalUnitKey(Candidate(Path.Replace("{n}", "2"), "000000000000"));
+        var unitB0 = HidFamily.PhysicalUnitKey(
+            Candidate(Path.Replace("1-5.3", "1-5.4").Replace("{n}", "0"), "000000000000")
+        );
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(unitA0, Is.EqualTo(unitA2));
+            Assert.That(unitA0, Is.EqualTo("l:/sys/devices/pci0000:00/0000:00:14.0/usb1/1-5/1-5.3"));
+            Assert.That(unitA0, Is.Not.EqualTo(unitB0));
         }
     }
 }
