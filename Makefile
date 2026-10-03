@@ -11,7 +11,7 @@ RUN      := $(UTF8) macrodeck-plugin run --project $(PROJECT) --state-directory 
 SDK      := grep -o 'MacroDeck.Sdk" Version="[^"]*' Directory.Packages.props | cut -d'"' -f3
 TESTS    := dotnet test DeviceBatteryInfo.slnx --configuration Release --filter "Category!=Hardware"
 
-RID      := $(if $(filter Windows_NT,$(OS)),win-x64,osx-arm64)
+RID      := $(if $(filter Windows_NT,$(OS)),win-x64,$(if $(filter Linux,$(shell uname -s)),linux-x64,osx-arm64))
 
 # Store images: every [UiPreview] scenario at each deck shape. Override on the command line,
 # e.g. make preview CELLS="--cells 2x2" PREVIEW_ARGS="--theme light".
