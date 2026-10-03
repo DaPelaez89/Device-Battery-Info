@@ -5,7 +5,7 @@ work in this repository, update this file as part of that change rather than lea
 
 This folder is **Device Battery Info** (`manifest.json` `name`), a Macro Deck 3 out-of-process plugin,
 scaffolded from `macrodeck-plugin new`. It reads battery state from three generic backends (the host
-computer (Windows or macOS), an Android phone over adb, Bluetooth devices on Windows and macOS) plus a
+computer (Windows, macOS or Linux), an Android phone over adb, Bluetooth devices on all three) plus a
 growing catalog of specific products under "Other devices" (each model lives in a device family, see
 `Sources/DeviceFamily.cs`), and exposes each as a set of Macro Deck variables plus charging/low events,
 alongside a custom deck widget (a multi-device panel and a single-device tile).
@@ -20,11 +20,14 @@ package itself is covered by
 ```
 src/DeviceBatteryInfo/
   Program.cs               builder chain: bind options, register registry + sources + poll loop
-  manifest.json            identity, icon, win-x64 and osx-arm64 entrypoints (one managed build)
+  manifest.json            identity, icon, win-x64, osx-arm64 and linux-x64 entrypoints (one managed
+                           build)
   macrodeck-build.json     the publish target per entrypoint
   BatteryIntegration.cs    IPluginIntegration + IVariableProvider (on-demand catalog, push) +
                            IEventProvider + IConfigFlowProvider (AllowsMultipleConfigurations)
   BatteryIntegration.Widgets.cs   the same partial class: IWidgetTypeProvider + IUiProvider
+  BatteryIntegration.Issues.cs    the same partial class: IIntegrationIssueProvider (the Linux HID
+                           permission issue)
   ConfigFlow/              DeviceConfigFlow (host-rendered steps per device: basics picks a name and
                            a category, "Other devices" adds a brand/model step; a backend that still
                            needs an address or a device name (adb, Bluetooth) then gets a details
@@ -33,8 +36,9 @@ src/DeviceBatteryInfo/
                            from the registered device families, for the "Other devices" step),
                            DeviceEntryReader (entries -> BatterySlot[]),
                            DeviceConfigKeys, SystemDeviceDiscovery
-  Core/DeviceCatalog.cs    the live device set: seeded from BatteryPluginOptions, replaced from config
-                           entries
+  Core/DeviceAccessProblems.cs   device ids whose hardware is connected but refused to open (HidFamily
+                           records, the issue reads)
+  Core/DeviceCatalog.cs    the live device set, replaced from the config entries
   Core/IDeviceDiscovery.cs public: lists present Bluetooth devices and attached Android phones for the
                            config-flow pickers (HID
                            enumeration is kept for a future "scan for supported devices" step)
@@ -44,18 +48,21 @@ src/DeviceBatteryInfo/
                            BatteryWidgetModel, BatteryWidgetTypes (descriptors + JSON Schema),
                            BatteryWidgetSamples (fixed demo models shared by the widget "sample"
                            surface and the previews), BatteryWidgetPreviews ([UiPreview] scenarios
-                           the host's Developer Tools list and render)
+                           the host's Developer Tools list and render), TextWidth (estimated text
+                           widths for the list percentage)
   Actions/RefreshBatteryAction.cs   "refresh" action: wakes the poll loop
   Core/                    IBatterySource, BatteryReading, BatteryRegistry, BatteryPollingService,
                            BatteryPluginOptions, BatterySlots (config -> device set, one place),
                            BatteryTrendTracker (per-device charge history -> BatteryTrend),
                            BatteryTrendFormatter (BatteryTrend -> display text / a normalized rate)
-  Sources/                 one folder per backend (SystemBattery, Razer, Logitech, Corsair, Rapoo, Aula, Sony, Adb, Bluetooth), each a
-                           pure parser + an IO wrapper behind an interface + IBatterySource(+Provider);
-                           SystemBattery has ISystemPowerReader (Windows: kernel32, macOS: pmset) and
-                           Bluetooth has IBluetoothBatteryReader (Windows: PowerShell PnP, macOS:
-                           system_profiler plus pmset accps), picked by OperatingSystem in
-                           BatterySourceRegistration;
+  Sources/                 one folder per backend (SystemBattery, Adb, Bluetooth, and the HID brands
+                           Razer, Logitech, Corsair, Rapoo, Aula, Sony), each a pure parser + an IO
+                           wrapper behind an interface + IBatterySource(+Provider);
+                           SystemBattery has ISystemPowerReader (Windows: kernel32, macOS: pmset,
+                           Linux: /sys/class/power_supply) and Bluetooth has IBluetoothBatteryReader
+                           (Windows: PowerShell PnP, macOS: system_profiler plus pmset accps, Linux:
+                           busctl against BlueZ; the last two share BluetoothSnapshot), picked by
+                           OperatingSystem in BatterySourceRegistration;
                            ExternalProcess runs the command line tools;
                            BatterySourceRegistration wires them into DI. DeviceFamily.cs holds the
                            device-family contracts (IDeviceFamily, DeviceModel, SimpleDeviceFamily,
@@ -69,17 +76,31 @@ src/DeviceBatteryInfo/
   Properties/launchSettings.json   the single real-host debug profile
 tests/DeviceBatteryInfo.Tests/
   BatteryIntegrationTests.cs      builds, initializes, the variables catalogue + a read work
-  BatterySourceParsingTests.cs    Razer report / PnP / Win32 power-status parsers
+  BatterySourceParsingTests.cs    Razer report / PnP / Win32 power-status parsers, the Android picker
+  BatteryTrendTrackerTests.cs     trend windows, segments per charging state, the trend text
+  BatteryWidgetViewTests.cs       every widget tree built through a real UiView, the config form, glyph
+                                  paths, responsive variants, the previews
+  CatalogNotificationTests.cs     the integration never takes a catalog notifier, and re-initializes cleanly
+  DeviceConfigFlowTests.cs        the config flow end to end, the way the host drives it
+  DeviceEntryReaderTests.cs       config entries -> device slots, including the legacy keys
+  DeviceFamilyTests.cs            model ids, the catalog, DeviceFamilyProvider
+  HidFamilyTests.cs               probing, path caching, identical units, refused (unopenable) devices
+  HidProtocolTests.cs             a second protocol on the shared HID plumbing, dongle or cable, push-only
   <Brand>ProtocolTests.cs         per-brand HID frames captured on real hardware (Logitech, Corsair,
                                   Rapoo, AULA, Sony)
   MacOsSourceTests.cs             pmset and system_profiler parsers, the Bluetooth snapshot, the system
                                   source
-  HidTransportPlatformTests.cs    macOS interface and unit keys, the bounded exchange on a fake channel
+  LinuxSourceTests.cs             power_supply and BlueZ parsers, sysfs HID interface and unit keys
+  HidTransportPlatformTests.cs    macOS and Windows interface and unit keys, the bounded exchange on a fake
+                                  channel, vendor-collection matching
   BatteryRegistryTests.cs         registry update / stale / retain, and catalog id round-trips
   HardwareTests.cs                [Explicit, Category=Hardware]: lists Bluetooth and HID interfaces, reads
                                   every supported HID device through the plugin, and reads one again while a
                                   foreign poller hammers the same control interface (the Synapse case); all
                                   output goes through HardwareReport so every line has the same shape
+docs/linux-setup.md               end-user guide the Linux issue links to (installs the rule by URL)
+packaging/linux/70-device-battery-info.rules   udev rule granting the seat user the HID vendors' hidraw
+                                  nodes; one line per HidProtocol vendor id (LinuxUdevRuleTests checks it)
 ```
 
 Design knowledge that is not obvious from the code alone:
@@ -395,8 +416,8 @@ Design knowledge that is not obvious from the code alone:
   and writing `0x05` is something no reference implementation does. Lightbar, player LEDs, rumble
   and adaptive triggers live in output report `0x02` (USB) and are not used.
 - **HID on macOS uses HidSharp for the feature reports and enumeration, through `IFeatureChannel`.**
-  `HidSharpTransport` opens a device with `NativeHid` on Windows and with
-  `HidStream.SetFeature/GetFeature` elsewhere; the loop, timing and buffer layout are unchanged apart
+  `HidSharpTransport` opens a device with `NativeHid` on Windows, `LinuxHidraw` on Linux and
+  `HidStream.SetFeature/GetFeature` on macOS; the loop, timing and buffer layout are unchanged apart
   from those open/set/get call sites. HidSharp lists only devices with a real USB id on macOS (it returns
   nothing on a Mac with only built-in Apple devices), paths look like
   `.../IOUSBHostInterface@N/AppleUserUSBHostHIDDevice` with `N` in hex, and the feature report length
@@ -416,13 +437,51 @@ Design knowledge that is not obvious from the code alone:
   that report id (`OutputReportLength`), not the longest output report of the interface. Read on macOS:
   Razer Basilisk V3 Pro (cable and dongle) and the Logitech G Pro X Wireless headset; the Logitech mice
   are unverified there.
+- **Linux reads files and D-Bus, and needs a udev rule for HID.** `PowerSupplyBatteryParser` reads
+  `/sys/class/power_supply/*/uevent` (no process): `TYPE=Battery` only, never `SCOPE=Device` (a
+  peripheral the kernel drives, such as a Logitech mouse through hid-logitech-hidpp) and never
+  `PRESENT=0`. A battery reports either energy (`ENERGY_*` in uWh with `POWER_NOW` in uW) or charge
+  (`CHARGE_*` in uAh with `CURRENT_NOW` in uA), the two are never summed together, and a rate can be
+  negative on some drivers. Several batteries (ThinkPads) combine into one reading. `Not charging` (a charge
+  threshold) maps like macOS's `AC attached`. `BlueZBatteryReader` runs
+  `/usr/bin/busctl --system --json=short call org.bluez / org.freedesktop.DBus.ObjectManager GetManagedObjects`
+  once per snapshot; `BlueZDeviceParser` lists connected `org.bluez.Device1` objects by `Alias` (the
+  desktop's name, falling back to `Name`) with `org.bluez.Battery1.Percentage`. busctl wraps every variant
+  as `{ "type", "data" }`. **Never use HidSharp's `SetFeature`/`GetFeature` on Linux**: against a
+  DeathAdder V3 Pro dongle they returned an all-zero buffer and no error, while `HIDIOCSFEATURE` /
+  `HIDIOCGFEATURE` on the same node answered correctly, so `LinuxFeatureChannel` issues those ioctls
+  itself (`LinuxHidraw`, report id at byte 0 as everywhere). HidSharp is still used on Linux for
+  enumeration, report lengths and the input/output report exchange (plain hidraw read/write, unverified
+  on hardware there). HidSharp on Linux uses hidraw and its `DevicePath` is the sysfs path
+  (`/sys/devices/.../1-5.3/1-5.3:1.1/0003:1532:00B7.0002/hidraw/hidraw1`): the interface number is the
+  decimal `N` of the `<port>:<config>.N` node and `PhysicalUnitKey` is the USB device directory above it
+  (`l:` prefix). Like macOS, one hidraw node carries every collection of its interface, so the non-Windows
+  report-length and usage handling applies. hidraw nodes are `root:root 0600` by default and HidSharp
+  must open a node even to read its report lengths, so without the udev rule every candidate comes back
+  with all lengths 0 (`HidCandidate.CouldNotOpen`). `FindCandidates` returns those flagged rather than
+  dropping them, and `HidFamily` records an entry in `DeviceAccessProblems` (logging once per episode)
+  when its model is connected but no interface opens; a readable interface or an absent device clears it.
+  On Linux `BatteryIntegration` turns that into an Error integration issue naming the entries (only those
+  still in `DeviceCatalog`, so a deleted entry drops out). An issue's button runs only `ResolveIssueAsync`
+  and the SDK's follow-ups are `None` or `StartConfigFlow`, so the plugin opens `docs/linux-setup.md`
+  itself (`Process.Start` with `UseShellExecute`, which is `xdg-open` on Linux, as System-Media does for
+  its VLC add-on) and a failure toast carries the URL. The host re-lists issues on its own; the issue
+  clears at the next poll once the device opens. Removing the udev rule does not revoke access until the
+  device is replugged or `udevadm trigger` runs, so test the issue only after that.
+  `GetIssuesAsync` is polled by the host and must stay a read of recorded state. The beta.15
+  `PluginTestHarness` has no `Issues` member yet, so tests call the integration from the harness's DI. The rule tags the vendors' nodes `uaccess`, which must happen before
+  `73-seat-late.rules`, hence the `70-` prefix; Bluetooth HID nodes (uhid) have no USB vendor attribute
+  and are not covered. Read on Linux: the Razer DeathAdder V3 Pro (dongle and cable).
 
-Authoritative upstream documentation, in the
-[Macro Deck 3 repository](https://github.com/Macro-Deck-App/Macro-Deck-3/tree/main/docs/plugin-development):
-`sdk-reference.md` (every contract type), `plugin-hosting.md` (builder, registration modes, manifest,
-artifact, environment variables), `capability-parity.md` (what behaves differently out of process),
-`analyzers.md`, `conformance.md`, `testing-plugins.md`, `cli.md`. When a question is about SDK behaviour
-rather than this template's own code, look there rather than guessing.
+Authoritative upstream documentation is at <https://docs.macro-deck.app/> (the Macro Deck 3 repository itself is not public):
+[plugin hosting](https://docs.macro-deck.app/reference/plugin-hosting/) (builder, registration modes, manifest, artifact,
+environment variables), [capability parity](https://docs.macro-deck.app/reference/capability-parity/) (what behaves differently
+out of process), [SDK packages](https://docs.macro-deck.app/reference/sdk-packages/), the [feature guides](https://docs.macro-deck.app/features/) (one
+per capability, e.g. [integration issues](https://docs.macro-deck.app/features/integration-issues/)),
+[analyzers](https://docs.macro-deck.app/reference/analyzers/), [conformance](https://docs.macro-deck.app/reference/conformance/),
+[testing](https://docs.macro-deck.app/features/testing/) and the [CLI](https://docs.macro-deck.app/cli/). When a question is about SDK behaviour rather
+than this plugin's own code, look there; the SDK assemblies ship without XML docs, so where a page is
+missing, reflect over the package instead of guessing.
 
 ## Before you start on a fresh plugin
 
@@ -615,9 +674,10 @@ change; a notification landing *during* the reinit makes it unregister and re-re
 integration, which re-enters `InitializeAsync`, which notifies again - an 8-deep loop that ends with
 every provided variable failing to register as `AlreadyExists` (net: zero variables, and the
 localization + widget-type registration churned so strings render as `[[plugin:<id>:Key]]` and the
-widgets vanish). `BatteryIntegration` gates every announcement behind a `_ready` flag set at the end
-of `InitializeAsync` and de-dupes against the last announced device-id set; `CatalogNotificationTests`
-locks this in. Genuine runtime changes (a source appears mid-session) announce fine once `_ready`.
+widgets vanish). `BatteryIntegration` therefore takes no `IPluginCatalogNotifier` at all
+(`CatalogNotificationTests` asserts that): a device-set change only re-polls, and the on-demand variable
+catalogue is resolved live. Integration issues need no notification either, because the host lists them
+with a live call on its own schedule (confirmed: the Linux HID issue appears without one).
 
 ### Configuration and secrets
 
@@ -772,7 +832,7 @@ A `dotnet build -c Release` output is *not* packable: the manifest points at `ru
 only `build` assembles, so `validate`/`pack` against `bin/Release/net10.0` fails on a missing entrypoint.
 Adding a platform means adding it to `entrypoints` **and** `macrodeck-build.json`.
 
-This plugin is **framework-dependent**: `entrypoints.win-x64` and `osx-arm64` each name
+This plugin is **framework-dependent**: `entrypoints.win-x64`, `osx-arm64` and `linux-x64` each name
 `runtimes/<rid>/DeviceBatteryInfo.dll` (the same managed build, no native assets) with `"runtime": {
 "kind": "FrameworkDependent", "dotnetVersion": "10.0" }`, and `macrodeck-build.json` publishes with
 `--self-contained false -p:UseAppHost=false`. Macro Deck ships a .NET 10 runtime (ASP.NET Core included)

@@ -1,7 +1,7 @@
 # Device Battery Info
 
 A [Macro Deck 3](https://macro-deck.app/) plugin that shows the battery level of your computer
-(Windows or macOS), your Android phone, your Bluetooth devices and a growing list of specific gaming
+(Windows, macOS or Linux), your Android phone, your Bluetooth devices and a growing list of specific gaming
 peripherals, right on your deck.
 
 ## Contents
@@ -49,9 +49,11 @@ These work with whatever hardware of that kind you have.
 | ------------------------------ | -------- | ----------------------------------------------- | ------- | -------- |
 | This computer / laptop         | Windows  | Win32 `GetSystemPowerStatus`                    | yes     | yes      |
 | This computer / laptop         | macOS    | `pmset -g batt`                                 | yes     | yes      |
-| Android phone                  | both     | Macro Deck's own adb connection                 | yes     | yes      |
+| This computer / laptop         | Linux    | `/sys/class/power_supply`                       | yes     | yes      |
+| Android phone                  | all      | Macro Deck's own adb connection                 | yes     | yes      |
 | Bluetooth audio device         | Windows  | PnP battery property via PowerShell             | yes     | rarely   |
 | Bluetooth device               | macOS    | `system_profiler` plus `pmset -g accps`         | yes     | no       |
+| Bluetooth device               | Linux    | BlueZ's `Battery1` over D-Bus (`busctl`)        | yes     | no       |
 
 On macOS a Bluetooth device reports one level: its main battery, or the lower of the left and right
 earbud (the case is ignored). Connected devices that `system_profiler` lists without a battery, such as
@@ -59,6 +61,12 @@ many Logitech mice, get their level from `pmset -g accps`, which is where macOS 
 batteries. Only devices that are connected right now are read, because macOS keeps a stale level for
 devices that are not. A Mac that is held below full on AC by Optimized Battery Charging reports its level
 with an unknown charging state, since it is neither charging nor discharging.
+
+On Linux the computer's batteries are read from the kernel, and a laptop with two batteries reports them
+as one level. A battery held below full by a charge threshold reports an unknown charging state, like a
+Mac on Optimized Battery Charging. A Bluetooth device reports the level BlueZ publishes for it: Bluetooth
+LE devices with a battery service do so on their own, headsets usually through PipeWire. Only connected
+devices are listed, by the name the desktop shows for them.
 
 ### Specific devices ("Other devices")
 
@@ -87,20 +95,27 @@ Own a device that is not listed? Adding it is the main way this catalog grows, s
 ## Installing
 
 Download the packed `.macroDeckPlugin` file from the
-[latest release](https://github.com/PyFlat-JR/Device-Battery-Info/releases) (or from the store
+[latest release](https://github.com/PyFlat/Device-Battery-Info/releases) (or from the store
 listing, once published) and install it from Macro Deck's plugin manager.
 
-The plugin ships for **Windows x64** and **macOS on Apple silicon**. Intel Macs and Linux are not
+The plugin ships for **Windows x64**, **macOS on Apple silicon** and **Linux x64**. Intel Macs are not
 supported. On macOS the Bluetooth source relies on the `device_connected` layout of `system_profiler`,
 which macOS 12 and later are expected to produce (checked on macOS 27). A connected device with a battery
 in `system_profiler` itself, such as earbuds, has not been seen on real hardware; a Logitech MX Master 3S
 was read through `pmset -g accps`.
 
-USB HID devices (the Razer and Logitech models below) are read on macOS through the same HID code as on
+USB HID devices (the catalog models above) are read on macOS through the same HID code as on
 Windows. That was checked on macOS with a Razer Basilisk V3 Pro (cable and dongle) and a Logitech G Pro X
 Wireless headset. macOS can ask for **Input Monitoring** before an application may open some HID
 interfaces; if a device stays unavailable, allow Macro Deck under System Settings > Privacy & Security >
 Input Monitoring. The Logitech mice have not been tried on macOS.
+
+On Linux the plugin needs a systemd-based distribution (it calls `busctl` for Bluetooth) and, for the USB
+HID devices, read and write access to their `/dev/hidraw*` nodes, which only root has by default. A
+one-time udev rule grants that; [Linux setup](docs/linux-setup.md) has the commands. Until it is
+installed, Macro Deck shows a problem on the plugin naming the device and pointing to that guide.
+On Linux this was checked with a Razer DeathAdder V3 Pro (dongle and cable); the other catalog devices
+have not been tried there yet.
 
 ## Setting up devices
 
@@ -121,7 +136,7 @@ phone. A phone that is not attached yet can be entered by hand: a USB phone by i
 one by `host:port`, which the plugin connects to on its own (Android 11+ needs the phone paired first).
 
 A Bluetooth device is found by the name the operating system shows for it. An entry that is moved from
-Windows to macOS keeps working only if that name is the same on both, so rename it in the entry otherwise.
+one operating system to another keeps working only if that name is the same on both, so rename it in the entry otherwise.
 
 Editing an existing entry pre-fills its fields. There is no default device: a fresh install shows
 nothing until you add one, and the widgets say so until then.
@@ -162,7 +177,8 @@ launch the plugin against the running Macro Deck through `macrodeck-plugin run` 
 credential kept in `src/DeviceBatteryInfo/.macrodeck-dev-state/`), `make stub` against a stub host,
 `make preview` renders the widget previews to PNGs in `artifacts/previews/` (the store images),
 `make cli` keeps the CLI at the SDK's version, `make pack` builds and inspects the artifact for this
-machine's platform (`win-x64` on Windows, `osx-arm64` otherwise; the release workflow builds both), and
+machine's platform (`win-x64` on Windows, `linux-x64` on Linux, `osx-arm64` on a Mac; the release
+workflow builds all three), and
 `make release VERSION=x.y.z` tests and packs, bumps `manifest.json`, commits, tags `vx.y.z` and pushes -
 the tag starts the release workflow. On Windows it needs GNU make and Git Bash's `sh` on `PATH`.
 
@@ -171,14 +187,16 @@ the tag starts the release workflow. On Windows it needs GNU make and Git Bash's
 ```
 src/DeviceBatteryInfo/
   Program.cs               builder chain: bind options, register registry + sources + poll loop
-  manifest.json            identity, icon, win-x64 and osx-arm64 entrypoints
+  manifest.json            identity, icon, win-x64, osx-arm64 and linux-x64 entrypoints
   BatteryIntegration.cs    IPluginIntegration + IEventProvider + IConfigFlowProvider
   BatteryIntegration.Widgets.cs   the same partial class: IWidgetTypeProvider + IUiProvider
+  BatteryIntegration.Issues.cs    the same partial class: IIntegrationIssueProvider (Linux HID access)
   ConfigFlow/              the device config flow (add/edit steps, discovery, the "Other devices" catalog)
   Core/                    IBatterySource, BatteryReading, BatteryRegistry, BatteryPollingService,
-                           BatteryPluginOptions, DeviceCatalog
-  Sources/                 one folder per backend (SystemBattery, Razer, Logitech, Adb, Bluetooth): a pure
-                           parser, an IO wrapper behind an interface, and an IBatterySource(+Provider).
+                           BatteryPluginOptions, DeviceCatalog, DeviceAccessProblems
+  Sources/                 one folder per backend (SystemBattery, Adb, Bluetooth, and the HID brands Razer,
+                           Logitech, Corsair, Rapoo, Aula, Sony): a pure parser, an IO wrapper behind an
+                           interface, and an IBatterySource(+Provider).
                            Hid/ is the shared HID transport, base class and family; a brand adds one
                            protocol file whose device list is one line per supported model
   Variables/               slot x field -> VariableDefinition, and the reverse resolve
@@ -186,8 +204,10 @@ src/DeviceBatteryInfo/
   Actions/                 the "Refresh battery levels" action
   Localization/Strings.resx   default-culture strings; Strings.<culture>.resx per language
 tests/DeviceBatteryInfo.Tests/
-  one file per capability under test (integration, source parsers, registry, widgets, config flow,
-  catalog notifications, HID family and protocols)
+  one file per capability under test (integration, source parsers per platform, registry, widgets,
+  config flow, catalog notifications, HID family and protocols)
+docs/                      adding a device, and the Linux setup guide the plugin links to
+packaging/linux/           the udev rule Linux needs for the USB HID devices
 ```
 
 ### Run and debug against Macro Deck
@@ -403,11 +423,11 @@ MIT, see [LICENSE](LICENSE). Macro Deck itself is licensed under Apache 2.0.
 ## Further reading
 
 - [Adding a device](docs/adding-a-device.md): the contract a new battery source implements
-- [Plugin development docs](https://github.com/Macro-Deck-App/Macro-Deck-3/tree/main/docs/plugin-development)
+- [Plugin development docs](https://docs.macro-deck.app/)
 - [Sample plugins](https://github.com/Macro-Deck-App/Macro-Deck-Sample-Plugins): a worked example per capability
-- [`plugin-hosting.md`](https://github.com/Macro-Deck-App/Macro-Deck-3/blob/main/docs/plugin-development/plugin-hosting.md): the builder API, registration modes, the artifact format and every `MACRO_DECK_PLUGIN_*` variable
-- [`sdk-reference.md`](https://github.com/Macro-Deck-App/Macro-Deck-3/blob/main/docs/plugin-development/sdk-reference.md): every interface and record the plugin builds against
-- [`cli.md`](https://github.com/Macro-Deck-App/Macro-Deck-3/blob/main/docs/plugin-development/cli.md): every CLI command and option
-- [`testing-plugins.md`](https://github.com/Macro-Deck-App/Macro-Deck-3/blob/main/docs/plugin-development/testing-plugins.md): the test harness, the fakes and the manual clock
-- [`conformance.md`](https://github.com/Macro-Deck-App/Macro-Deck-3/blob/main/docs/plugin-development/conformance.md): the conformance suite and its check ids
-- [`analyzers.md`](https://github.com/Macro-Deck-App/Macro-Deck-3/blob/main/docs/plugin-development/analyzers.md): the compile-time diagnostics
+- [Plugin hosting](https://docs.macro-deck.app/reference/plugin-hosting/): the builder API, registration modes, the artifact format and every `MACRO_DECK_PLUGIN_*` variable
+- [SDK packages](https://docs.macro-deck.app/reference/sdk-packages/) and the [feature guides](https://docs.macro-deck.app/features/): the contracts the plugin builds against
+- [CLI](https://docs.macro-deck.app/cli/): every CLI command and option
+- [Testing](https://docs.macro-deck.app/features/testing/): the test harness, the fakes and the manual clock
+- [Conformance](https://docs.macro-deck.app/reference/conformance/): the conformance suite and its check ids
+- [Analyzers](https://docs.macro-deck.app/reference/analyzers/): the compile-time diagnostics
