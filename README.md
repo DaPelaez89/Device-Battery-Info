@@ -179,8 +179,9 @@ credential kept in `src/DeviceBatteryInfo/.macrodeck-dev-state/`), `make stub` a
 `make cli` keeps the CLI at the SDK's version, `make pack` builds and inspects the artifact for this
 machine's platform (`win-x64` on Windows, `linux-x64` on Linux, `osx-arm64` on a Mac; the release
 workflow builds all three), and
-`make release VERSION=x.y.z` tests and packs, bumps `manifest.json`, commits, tags `vx.y.z` and pushes -
-the tag starts the release workflow. On Windows it needs GNU make and Git Bash's `sh` on `PATH`.
+`make release` tests and packs, then tags the version in `manifest.json` and pushes - the tag starts the
+release workflow. `make release VERSION=x.y.z` does the same for another version, bumping and committing
+`manifest.json` first. Either refuses a version that is not newer than the latest release tag. On Windows it needs GNU make and Git Bash's `sh` on `PATH`.
 
 ### Project layout
 
