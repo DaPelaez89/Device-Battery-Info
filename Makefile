@@ -18,7 +18,8 @@ PACK     := rm -f artifacts/*.macroDeckPlugin && \
             macrodeck-plugin inspect --artifact "$$(ls artifacts/*.macroDeckPlugin)"
 
 # Store images: every [UiPreview] scenario at each deck shape. Override on the command line,
-# e.g. make preview CELLS="--cells 2x2" PREVIEW_ARGS="--theme light".
+# e.g. make preview CELLS="--cells 2x2" PREVIEW_ARGS="--theme light". STORE=1 then pads each one onto a
+# 16:9 canvas, the shape the store crops card artwork to.
 CELLS    := --cells 1x1 --cells 2x1 --cells 2x2
 PREVIEWS := artifacts/previews
 
@@ -33,7 +34,8 @@ help:
 	@echo "make run            run the plugin against the running Macro Deck"
 	@echo "make watch          the same, with hot reload / restart on every saved change"
 	@echo "make stub           run the plugin against a disposable stub host (no Macro Deck needed)"
-	@echo "make preview        render the widget previews to PNGs in $(PREVIEWS)/ (store images)"
+	@echo "make preview [STORE=1]"
+	@echo "                    render the widget previews to PNGs in $(PREVIEWS)/ (store images; STORE=1 pads to 16:9)"
 	@echo "make pack           build this platform's .macroDeckPlugin ($(RID)) into artifacts/ and inspect it"
 	@echo "make conformance    run the conformance suite, report in conformance.md"
 	@echo "make update         bump every package to its newest release (review the diff)"
@@ -64,6 +66,7 @@ stub:
 preview:
 	rm -rf $(PREVIEWS)
 	$(UTF8) macrodeck-plugin preview render --project $(PROJECT) $(CELLS) --output $(PREVIEWS) $(PREVIEW_ARGS)
+	$(if $(STORE),dotnet run tools/StoreCanvas.cs -- $(PREVIEWS))
 
 pack:
 	$(PACK)
