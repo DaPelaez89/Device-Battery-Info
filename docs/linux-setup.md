@@ -58,6 +58,8 @@ printf '%s\n' \
   'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="054c", ATTRS{idProduct}=="0ce6", TAG+="uaccess"' \
   '# Sony DualSense over Bluetooth, which has no USB attributes (bus 0005 in the HID device name)' \
   'SUBSYSTEM=="hidraw", KERNELS=="0005:054C:0CE6.*", TAG+="uaccess"' \
+  '# Trust BAYO II ergonomic HID'\
+  'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="145f", ATTRS{idProduct}=="031e", TAG+="uaccess"'\
   | sudo tee /etc/udev/rules.d/70-device-battery-info.rules > /dev/null
 sudo udevadm control --reload-rules
 sudo udevadm trigger --subsystem-match=hidraw
